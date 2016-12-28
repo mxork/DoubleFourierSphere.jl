@@ -1,0 +1,9 @@
+*
+!.gitignore
+!*/
+!*.m
+!*.png
+!*.txt
+!*.pdf
+!*.md
+!*.jl
