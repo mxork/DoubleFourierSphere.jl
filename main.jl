@@ -44,7 +44,6 @@ function fftsphere(G::Array{Float64})
     dλ, dθ = 2*π/L, 2*π/Z
     off = -dθ/2 # θ offset for interior grid
 
-
     # Cheong mode precook
     for mi in 3:L:2 #even nonzero wavenumbers
         for θi in 1:Z
@@ -53,25 +52,34 @@ function fftsphere(G::Array{Float64})
         end
     end
 
-    Gc = fft(Gc,2)
+    # goddamn phase shifting - interp1, sue me
+    Gf = Array{Complex128}(size(Gc)) 
+    for i in 1:L
+        Gf[i,1] = (Gc[i,1] + Gc[i, Z])/2
+        for j in 2:Z
+            Gf[i,j] = (Gc[i,j-1] + Gc[i, j])/2
+        end
+    end
+
+    Gf = fft(Gf,2)
 
     #cosine
-    Gc[1,:] = real(Gc[1,:])
+    Gf[1,:] = real(Gf[1,:])
 
     #sine
     for i in 2:L
-        Gc[i,:] = imag(Gc[i,:])*1.0im
+        Gf[i,:] = imag(Gf[i,:])*1.0im
     end
 
-    Gc
+    Gf
 end
 
 function ifftsphere(Gc::Array{Complex128})
     L,Y,Z = size(Gc,1), div(size(Gc,2),2), size(Gc, 2)
     dλ, dθ = 2*π/L, 2*π/Z
-    # off = -dθ/2 # θ offset for interior grid
+    off = -dθ/2 # θ offset for interior grid
 
-    #consistency
+    #reinforce consistency
     Gc[1,:] = real(Gc[1,:])
     for i in 2:L
         Gc[i,:] = imag(Gc[i,:])*1.0im
@@ -83,20 +91,29 @@ function ifftsphere(Gc::Array{Complex128})
     Gc = ifft(Gc, 2)
 
     # take even for original spacing
-    # Gc = [Gc[i] for i in 2:2:Z]
+    # Gc = Gc[:, 2:2:Z]
+
+    # back to interior, using interp1. could spectral this
+    Gf = Array{Complex128}(size(Gc)) 
+    for i in 1:L
+        for j in 1:(Z-1)
+            Gf[i,j] = (Gc[i,j] + Gc[i, j+1])/2
+        end
+        Gf[i,Z] = (Gc[i,1] + Gc[i, Z])/2
+    end
 
     for mi in 3:L:2 #even wavenumbers
         for θi in 1:Z
             θ = θi * dθ + off
-            Gc[mi,θi] *= sin(θ) #should not be zero because of interior spacing
+            Gf[mi,θi] *= sin(θ) #should not be zero because of interior spacing
         end
     end
 
-    Gc = ifft(Gc,1)
-    Gc = real(Gc)
+    Gf = ifft(Gf,1)
+    Gf = real(Gf)
     
     #TODO return lower half
-    Gc[:, 1:Y]
+    Gf[:, 1:Y]
 end
 
 # returns the periodic completion of F
