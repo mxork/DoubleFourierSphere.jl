@@ -1,5 +1,5 @@
 # G(λ,θ) is real scalar field, equally spaced
-# over lat-long grid.
+# over lat-long interior grid.
 # returns F, which is similar.
 function poisson(G::Array{Float64})
     Gc = fftsphere(G)
@@ -34,8 +34,8 @@ function poisson(G::Array{Float64})
     F = ifftsphere(Fc)
 end
 
-#TODO check G  ifft(fft(G))
-function fftsphere(G::Array{Complex128})
+#TODO check G  ifft(fft(G)); phase shift from interior grid
+function fftsphere(G::Array{Float64})
     Gc = complete2torus(G)
     # longitudinal transform: 1 means FFT wrt to longitude dim
     Gc = fft(Gc, 1)
@@ -45,61 +45,77 @@ function fftsphere(G::Array{Complex128})
     off = -dθ/2 # θ offset for interior grid
 
 
-    # Cheong mode
-    for mi in 3:L:2 #even wavenumbers
+    # Cheong mode precook
+    for mi in 3:L:2 #even nonzero wavenumbers
         for θi in 1:Z
             θ = θi * dθ + off
-            Gc[mi] /= sin(θ) #should not be zero because of interior spacing
+            Gc[mi,θi] /= sin(θ) #should not be zero because of interior spacing
         end
     end
 
     Gc = fft(Gc,2)
 
     #cosine
-    Gc[1] = real(Gc[0])
+    Gc[1,:] = real(Gc[1,:])
 
     #sine
     for i in 2:L
-        Gc[i] = imag(Gc[i])
+        Gc[i,:] = imag(Gc[i,:])*1.0im
     end
 
     Gc
 end
 
 function ifftsphere(Gc::Array{Complex128})
-    L,Y,Z = size(Gc,1), div(size(G,2),2), size(Gc, 2)
+    L,Y,Z = size(Gc,1), div(size(Gc,2),2), size(Gc, 2)
     dλ, dθ = 2*π/L, 2*π/Z
-    off = -dθ/2 # θ offset for interior grid
+    # off = -dθ/2 # θ offset for interior grid
 
     #consistency
-    Gc[1] = real(Gc[0])
+    Gc[1,:] = real(Gc[1,:])
     for i in 2:L
-        Gc[i] = imag(Gc[i])
+        Gc[i,:] = imag(Gc[i,:])*1.0im
     end
 
+    # need to interpolate to get interior θ-grid. zero-pad
+    # to double size along θ axis
+    # Gc = [2*Gc[:, 1:Y] zeros(L,Z) Gc[:, Y+1:Z]]
     Gc = ifft(Gc, 2)
+
+    # take even for original spacing
+    # Gc = [Gc[i] for i in 2:2:Z]
+
     for mi in 3:L:2 #even wavenumbers
         for θi in 1:Z
             θ = θi * dθ + off
-            Gc[mi] *= sin(θ) #should not be zero because of interior spacing
+            Gc[mi,θi] *= sin(θ) #should not be zero because of interior spacing
         end
     end
 
     Gc = ifft(Gc,1)
     Gc = real(Gc)
+    
     #TODO return lower half
+    Gc[:, 1:Y]
 end
 
 # returns the periodic completion of F
 # to 2-torus, make it complex while we're at it
 function complete2torus(F::Array{Float64})
-    L, M = size(F,1), size(F,2)
-    Fc = Array{Complex128}(L, 2*M)
+    L, Y = size(F,1), size(F,2)
+    Fc = Array{Complex128}(L, 2*Y)
 
+    # identity on first half
     for i in 1:L
-        for j in 1:M
+        for j in 1:Y
             Fc[i,j] = F[i,j]
-            Fc[modu(round(Int64, L/2)+i-1, L), modu(1-j, 2*M)] = F[i,j]
+        end
+    end
+
+    # shifted on second
+    for i in 1:L
+        for j in Y+1:2*Y
+            Fc[i,j] = Fc[modu(-1+i+div(L,2),L), modu(1-j,Y)]
         end
     end
 
@@ -156,7 +172,8 @@ end
 # returns a real scalar field F on long-lat grid,
 # with F(i,j) = f(2*pi*i/L, pi*j/M)
 function fillsphere(L, M, f)
-    [f(2*pi*i/L, pi*j/M) for i in 0:(L-1), j in 0:(M-1)]
+    #0.5== interior grid
+    [f(2*pi*i/L, pi*(j+0.5)/M) for i in 0:(L-1), j in 0:(M-1)]
 end
 
 # utilities for plotting. crikey.
@@ -165,11 +182,17 @@ function λsphere(L, M)
 end
 
 function θsphere(L, M)
-    [pi*j/M for i in 0:(L-1), j in 0:(M-1)]
+    [pi*(j+0.5)/M for i in 0:(L-1), j in 0:(M-1)]
 end
 
 # a là Muraki
 using PyPlot
+function sphereplot(G)
+    clf()
+    L, M = size(G,1), size(G,2)
+    contourf(λsphere(L,M), θsphere(L,M), G, cmap=ColorMap("inferno"))
+end
+
 function demo01(m, l, output_filename)
     clf()
     L, M = 40, 20
@@ -185,3 +208,26 @@ function demo02(m, l, α, output_filename)
 
     contourf(λsphere(L,M), θsphere(L,M), real(fillsphere(L,M,Q)), cmap=ColorMap("inferno"))
 end
+
+function ckfftinv(m,l)
+    L, M = 20,10
+    # contourf(λsphere(L,M), θsphere(L,M), G, cmap=ColorMap("inferno"))
+    # contourf(λsphere(L,M), θsphere(L,M), ifftsphere(fftsphere(G)), cmap=ColorMap("inferno"))
+    # for m in 1:4
+    #     for l in 1:4
+            Q = fouriermode(m, l)
+            G = real(fillsphere(L,M,Q))
+            println(abs(G-ifftsphere(fftsphere(G))))
+        # end
+    # end
+    G
+end
+
+function run()
+    L, M = 16,8
+    @show G = real(fillsphere(L,M,fouriermode(2,1)))
+    println()
+    @show round(real(complete2torus(G))*100)
+end
+
+run()
