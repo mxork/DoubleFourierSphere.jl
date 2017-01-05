@@ -15,7 +15,7 @@ function poisson(G::Array{Float64})
     for mi in 2:L
         m = mi-1 #TODO replace this with shifted index lookup
         if isodd(m)
-            D = [  i  == j ? -(2*m^2+j^2)/2 :
+            D = [ i  == j ? -(2*m^2+j^2)/2 :
                   i-j==-2 ? (j-1)*(j-2)/4 :
                   i-j== 2 ? (j+1)*(j+2)/4 :
                  0
@@ -34,7 +34,37 @@ function poisson(G::Array{Float64})
     F = ifftsphere(Fc)
 end
 
-#TODO check G  ifft(fft(G)); phase shift from interior grid
+function dcost(X)
+    N = size(X,1)
+    θs = 
+    [sum(X .* cos(2*pi*l*((1:N)-0.5)/N) ) for l in (-div(N,2)+1):div(N,2)]/N
+end
+
+function dsint(X)
+    N = size(X,1)
+    [sum(X .* sin(2*pi*l*((1:N)-0.5)/N) ) for l in (-div(N,2)+1):div(N,2)]/N
+end
+
+function dsinsint(X)
+    N = size(X,1)
+    [sum(X .* sin(2*pi*((1:N)-0.5)/N) .* sin(2*pi*l*((1:N)-0.5)/N) ) for l in (-div(N,2)+1):div(N,2)]/N
+end
+
+function idcost(X)
+    N = size(X,1)
+    [sum(X .* cos(θ * ((-div(N,2)+1):div(N,2) )) ) for θ in 2*pi*((1:N)-0.5)/N]
+end
+
+function idsint(X)
+    N = size(X,1)
+    [sum(X .* sin(θ * ((-div(N,2)+1):div(N,2) )) ) for θ in 2*pi*((1:N)-0.5)/N]
+end
+
+function idsinsint(X)
+    N = size(X,1)
+    [sin(θ) * sum(X .* sin(θ * ((-div(N,2)+1):div(N,2) )) ) for θ in 2*pi*((1:N)-0.5)/N]
+end
+
 function fftsphere(G::Array{Float64})
     Gc = complete2torus(G)
     # longitudinal transform: 1 means FFT wrt to longitude dim
@@ -46,17 +76,16 @@ function fftsphere(G::Array{Float64})
 
     Gf = Array{Complex128}(size(Gc))
     #  manually calc coefficients
+    ms = [(0:div(L,2))... ((-div(L,2)+1):-1)...]
     for mi in 1:L
-        for li in 1:Z
-            l = li-div(Z,2)
-            if mi == 1
-                Gf[mi,li] = sum(Gc[mi, :] .* cos(2*pi*( (1:Z)-0.5 )*l /Z) ) 
-            elseif isodd(mi) # note => m is even
-                Gf[mi,li] = sum(Gc[mi, :] .* sin(2*pi*( (1:Z)-0.5 ) /Z) .* cos(2*pi*( (1:Z)-0.5 )*l /Z) )
-            else
-                Gf[mi,li] = sum(Gc[mi, :] .* sin(2*pi*( (1:Z)-0.5 )*l /Z) )
-            end
-        end
+          m = ms[mi]
+          if m == 0
+              Gf[mi,:] = dcost(Gc[mi, :])
+          elseif iseven(m) 
+              Gf[mi,:] = dsinsint(Gc[mi, :])
+          else
+              Gf[mi,:] = dsint(Gc[mi, :])
+          end
     end
 
     # ifftshift(Gf, 2)
@@ -66,46 +95,27 @@ end
 function ifftsphere(Gc::Array{Complex128})
     L,Y,Z = size(Gc,1), div(size(Gc,2),2), size(Gc, 2)
     dλ, dθ = 2*π/L, 2*π/Z
-    # off = -dθ/2 # θ offset for interior grid
-
-    #consistency
-    Gc[1,:] = real(Gc[1,:])
-    for i in 2:L
-        Gc[i,:] = imag(Gc[i,:])*1.0im
-    end
+    off = -dθ/2 # θ offset for interior grid
 
     Gf = Array{Complex128}(size(Gc))
     #  manually calc coefficients
+    ms = [(0:div(L,2))... ((-div(L,2)+1):-1)...]
     for mi in 1:L
-        for li in 1:Z
-            m = [(0:div(L,2))... ((-div(L,2):-2) +1)...][mi]
-            l = li-div(Z,2)
-            if mi == 1
-                Gf[mi,li] = sum(Gc[mi, :] .* cos(2*pi*( (1:Z)-0.5 )*l /Z) ) 
-            elseif isodd(mi) # note => m is even
-                Gf[mi,li] = sum(Gc[mi, :] .* sin(2*pi*( (1:Z)-0.5 ) /Z) .* cos(2*pi*( (1:Z)-0.5 )*l /Z) )
-            else
-                Gf[mi,li] = sum(Gc[mi, :] .* sin(2*pi*( (1:Z)-0.5 )*l /Z) )
-            end
-        end
+          m = ms[mi]
+          if m == 0
+              Gf[mi,:] = idcost(Gc[mi, :])
+          elseif iseven(m) 
+              Gf[mi,:] = idsinsint(Gc[mi, :])
+          else
+              Gf[mi,:] = idsint(Gc[mi, :])
+          end
     end
 
-
-    # take even for original spacing
-    Gc = [Gc[i,j] for i in 1:L, j in 2:2:Z]
-
-    for mi in 3:L:2 #even wavenumbers
-        for θi in 1:Z
-            θ = θi * dθ + off
-            Gc[mi,θi] *= sin(θ) #should not be zero because of interior spacing
-        end
-    end
-
-    Gc = ifft(Gc,1)
-    Gc = real(Gc)
+    Gf = ifft(Gf,1)
+    Gf = real(Gf)
     
     #TODO return lower half
-    Gc[:, 1:Y]
+    Gf[:, 1:Y]
 end
 
 # returns the periodic completion of F
@@ -142,7 +152,7 @@ function fouriermode(m, l)
     if m==0 
         return (λ, θ) -> cos(l*θ)
     elseif m%2 == 0
-        return (λ, θ) -> sin(θ)sin(l*θ)*exp(1.0im*m*λ)
+        return (λ, θ) -> sin(θ)*sin(l*θ)*exp(1.0im*m*λ)
     else
         return (λ, θ) -> sin(l*θ)*exp(1.0im*m*λ)
     end
@@ -173,10 +183,10 @@ function sphericalmodeα(m,l,α)
     end
 end
 
-# using GSL
-# function legendre(m,l,x)
-#     sf_legendre_sphPlm(l,m,x)
-# end
+using GSL
+function legendre(m,l,x)
+    sf_legendre_sphPlm(l,m,x)
+end
 
 # returns a real scalar field F on long-lat grid,
 # with F(i,j) = f(2*pi*i/L, pi*j/M)
