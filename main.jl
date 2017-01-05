@@ -34,37 +34,6 @@ function poisson(G::Array{Float64})
     F = ifftsphere(Fc)
 end
 
-function dcost(X)
-    N = size(X,1)
-    θs = 
-    [sum(X .* cos(2*pi*l*((1:N)-0.5)/N) ) for l in (-div(N,2)+1):div(N,2)]/N
-end
-
-function dsint(X)
-    N = size(X,1)
-    [sum(X .* sin(2*pi*l*((1:N)-0.5)/N) ) for l in (-div(N,2)+1):div(N,2)]/N
-end
-
-function dsinsint(X)
-    N = size(X,1)
-    [sum(X .* sin(2*pi*((1:N)-0.5)/N) .* sin(2*pi*l*((1:N)-0.5)/N) ) for l in (-div(N,2)+1):div(N,2)]/N
-end
-
-function idcost(X)
-    N = size(X,1)
-    [sum(X .* cos(θ * ((-div(N,2)+1):div(N,2) )) ) for θ in 2*pi*((1:N)-0.5)/N]
-end
-
-function idsint(X)
-    N = size(X,1)
-    [sum(X .* sin(θ * ((-div(N,2)+1):div(N,2) )) ) for θ in 2*pi*((1:N)-0.5)/N]
-end
-
-function idsinsint(X)
-    N = size(X,1)
-    [sin(θ) * sum(X .* sin(θ * ((-div(N,2)+1):div(N,2) )) ) for θ in 2*pi*((1:N)-0.5)/N]
-end
-
 function fftsphere(G::Array{Float64})
     Gc = complete2torus(G)
     # longitudinal transform: 1 means FFT wrt to longitude dim
@@ -250,3 +219,34 @@ function run()
 end
 
 run()
+
+function dcost(X)
+    N = size(X,1)
+    [sum(X .* cos(2*pi*l*((1:N)-0.5)/N) ) for l in (-div(N,2)+1):div(N,2)]/N
+end
+
+function dsint(X)
+    N = size(X,1)
+    [sum(X .* sin(2*pi*l*((1:N)-0.5)/N) ) for l in (-div(N,2)+1):div(N,2)]/N
+end
+
+function dsinsint(X)
+    N = size(X,1)
+    [sum(X ./ sin(2*pi*((1:N)-0.5)/N) .* sin(2*pi*l*((1:N)-0.5)/N) ) for l in (-div(N,2)+1):div(N,2)]/N
+end
+
+function idcost(X)
+    N = size(X,1)
+    [sum(X .* cos(θ * ((-div(N,2)+1):div(N,2) )) ) for θ in 2*pi*((1:N)-0.5)/N]
+end
+
+function idsint(X)
+    N = size(X,1)
+    [sum(X .* sin(θ * ((-div(N,2)+1):div(N,2) )) ) for θ in 2*pi*((1:N)-0.5)/N]
+end
+
+function idsinsint(X)
+    N = size(X,1)
+    [sin(θ) * sum(X .* sin(θ * ((-div(N,2)+1):div(N,2) )) ) for θ in 2*pi*((1:N)-0.5)/N]
+end
+
