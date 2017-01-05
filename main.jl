@@ -8,31 +8,43 @@ function poisson(G::Array{Float64})
     #solution matrix
     Fc = Array{Complex128}(L,Z)
 
+    ms = [(0:div(L,2))...; ((-div(L,2)+1):-1)]
+    ls = -div(Z,2)+1:div(Z,2)
+
     #poisson
     # TODO check this with fine-tooth comb
-    A = [i==j ? 1/2 : abs(i-j)==2 ? -1/4 :0 for i in 1:L, j in 1:Z]
-    A[1,1] = 3/4 # periodicity of g 
-    for mi in 2:L
-        m = mi-1 #TODO replace this with shifted index lookup
-        if isodd(m)
-            D = [ i  == j ? -(2*m^2+j^2)/2 :
+    A = Complex128[m==l ? 1/2 : abs(m-l)==2 ? -1/4 :0 for m in ms, l in ls]
+
+    for mi in 1:L
+        m = ms[mi] #TODO replace this with shifted index lookup
+        if m==0
+            continue
+            # D = Complex128[ i == j ? -(2*m^2+j^2)/2 :
+            #       i-j==-2 ? j*(j-1)/4 :
+            #       i-j== 2 ? j*(j+1)/4 :
+            #      0
+            #      for i in ms, j in ls]
+            # D[1, Y] = 1.0 # cheat for zero mode
+        elseif isodd(m)
+            D = Complex128[ i == j ? -(2*m^2+j^2)/2 :
                   i-j==-2 ? (j-1)*(j-2)/4 :
                   i-j== 2 ? (j+1)*(j+2)/4 :
                  0
-                 for i in 1:L, j in 1:Z]
+                 for i in ms, j in ls]
         else
-            D = [  i  == j ? -(2*m^2+j^2)/2 :
+            D = Complex128[ i  == j ? -(2*m^2+j^2)/2 :
                   i-j==-2 ? j*(j-1)/4 :
                   i-j== 2 ? j*(j+1)/4 :
                  0
-                 for i in 1:L, j in 1:Z]
+                 for i in ms, j in ls]
         end
 
-        Fc[mi] = D\(A*G[mi])
+        Fc[mi,:] = D\(A*Gc[mi,:])
     end
 
-    F = ifftsphere(Fc)
+    F = ifftsphere(-Fc) # negative cuz shit happens
 end
+
 
 function fftsphere(G::Array{Float64})
     Gc = complete2torus(G)
@@ -45,7 +57,7 @@ function fftsphere(G::Array{Float64})
 
     Gf = Array{Complex128}(size(Gc))
     #  manually calc coefficients
-    ms = [(0:div(L,2))... ((-div(L,2)+1):-1)...]
+    ms = [(0:div(L,2))...; ((-div(L,2)+1):-1)...]
     for mi in 1:L
           m = ms[mi]
           if m == 0
