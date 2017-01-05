@@ -44,26 +44,23 @@ function fftsphere(G::Array{Float64})
     dλ, dθ = 2*π/L, 2*π/Z
     off = -dθ/2 # θ offset for interior grid
 
-
-    # Cheong mode precook
-    for mi in 3:L:2 #even nonzero wavenumbers
-        for θi in 1:Z
-            θ = θi * dθ + off
-            Gc[mi,θi] /= sin(θ) #should not be zero because of interior spacing
+    Gf = Array{Complex128}(size(Gc))
+    #  manually calc coefficients
+    for mi in 1:L
+        for li in 1:Z
+            l = li-div(Z,2)
+            if mi == 1
+                Gf[mi,li] = sum(Gc[mi, :] .* cos(2*pi*( (1:Z)-0.5 )*l /Z) ) 
+            elseif isodd(mi) # note => m is even
+                Gf[mi,li] = sum(Gc[mi, :] .* sin(2*pi*( (1:Z)-0.5 ) /Z) .* cos(2*pi*( (1:Z)-0.5 )*l /Z) )
+            else
+                Gf[mi,li] = sum(Gc[mi, :] .* sin(2*pi*( (1:Z)-0.5 )*l /Z) )
+            end
         end
     end
 
-    Gc = fft(Gc,2)
-
-    #cosine
-    Gc[1,:] = real(Gc[1,:])
-
-    #sine
-    for i in 2:L
-        Gc[i,:] = imag(Gc[i,:])*1.0im
-    end
-
-    Gc
+    # ifftshift(Gf, 2)
+    Gf
 end
 
 function ifftsphere(Gc::Array{Complex128})
@@ -77,13 +74,25 @@ function ifftsphere(Gc::Array{Complex128})
         Gc[i,:] = imag(Gc[i,:])*1.0im
     end
 
-    # need to interpolate to get interior θ-grid. zero-pad
-    # to double size along θ axis
-    # Gc = [2*Gc[:, 1:Y] zeros(L,Z) Gc[:, Y+1:Z]]
-    Gc = ifft(Gc, 2)
+    Gf = Array{Complex128}(size(Gc))
+    #  manually calc coefficients
+    for mi in 1:L
+        for li in 1:Z
+            m = [(0:div(L,2))... ((-div(L,2):-2) +1)...][mi]
+            l = li-div(Z,2)
+            if mi == 1
+                Gf[mi,li] = sum(Gc[mi, :] .* cos(2*pi*( (1:Z)-0.5 )*l /Z) ) 
+            elseif isodd(mi) # note => m is even
+                Gf[mi,li] = sum(Gc[mi, :] .* sin(2*pi*( (1:Z)-0.5 ) /Z) .* cos(2*pi*( (1:Z)-0.5 )*l /Z) )
+            else
+                Gf[mi,li] = sum(Gc[mi, :] .* sin(2*pi*( (1:Z)-0.5 )*l /Z) )
+            end
+        end
+    end
+
 
     # take even for original spacing
-    # Gc = [Gc[i] for i in 2:2:Z]
+    Gc = [Gc[i,j] for i in 1:L, j in 2:2:Z]
 
     for mi in 3:L:2 #even wavenumbers
         for θi in 1:Z
