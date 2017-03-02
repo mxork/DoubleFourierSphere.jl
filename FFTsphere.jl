@@ -12,22 +12,22 @@ function fftsphere(U)
     Uf = zeros(Complex128, Nλ, Nφ)
 
     # TODO understand wtf, from Muraki
+    # pretty sure this is all just for dealing with interior grid, plus some other
+    # ops which got rolled in
+    # F(f(x-z))(k) = e^ikx F(f(x)), missing a 2 somewhere
     Ts = (π/2) * (0:Nφ-1) / Nφ # first quarter circle?
-    Vshiftcos = exp( -1.0im * Ts ) / (2*Nλ *Nφ) # denom just normalization, undone later
-    Vshiftsin = -Vshiftcos * exp(1.0im*π/2 * (1 - 1/Nφ))
-    Vshiftcos[1] /= 2
+    Vshiftcos = exp( -1.0im * Ts )
+    Vshiftsin = -Vshiftcos * exp(1.0im*π/2 * (1 - 1/Nφ)) # take this on faith
     Vsin = -1./sin((π/Nφ/2)*(1:2:2*Nφ-1));
 
     # m=0; read this as taking an even reflection,
     # then taking only the first half of the frequencies
     Uf[1,:] = real( fft( evenrefl(Um[1,:]) )[1:Nφ] .* Vshiftcos )
 
-    # m even; read this as comping for latitude, taking even reflection,
-    # then ...
-    # Muraki has a tricky with the -ve sign rolled into the Vsin
-    # making the reflection work out nicely
+    # m even
     # TODO make sense of the +1 shift of the frequencies,
     # probably something with aliasing... but why is 0th entry bogus?
+    # => likely just to get it to line up nicely with the definition of Vshiftsin
     for j in 3:2:Nλ
         Um[j, :] = Um[j, :] .* Vsin
         Uf[j, :] = fft( oddrefl(Um[j, :]) )[2:Nφ+1] .* Vshiftsin
@@ -45,9 +45,8 @@ end
 function ifftsphere(Uf)
     Nλ, Nφ = size(Uf, 1), size(Uf, 2)
 
-    Vunshiftcos    =  exp((1.0im*pi/Nφ/2)*(0:2*Nφ-1))*(2*Nφ*Nλ)
+    Vunshiftcos    =  exp((1.0im*pi/Nφ/2)*(0:2*Nφ-1))
     Vunshiftsin    =  1.0im*Vunshiftcos
-    Vunshiftcos[1] *= 2
     Vunsin         =  -sin((pi/Nφ/2)*(1:2:2*Nφ-1))
 
     Um = zeros(Complex128, size(Uf))
