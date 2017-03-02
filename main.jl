@@ -126,23 +126,6 @@ function modu(x, m)
     x <= 0 ? m+(x%m) : (x%m)+1
 end
 
-# returns the m-l fourier mode on the sphere,
-# m = λ wavenumber
-# l = θ wavenumber
-function fouriermode(m, l)
-    if m==0 
-        return (λ, θ) -> cos(l*θ)
-    elseif m%2 == 0
-        return (λ, θ) -> sin(θ)*sin(l*θ)*exp(1.0im*m*λ)
-    else
-        return (λ, θ) -> sin(l*θ)*exp(1.0im*m*λ)
-    end
-end
-
-function sphericalmode(m,l)
-    return (λ, θ) -> legendre(m,l, cos(θ))*exp(1.0im*m*λ)
-end
-
 # rotate around x-axis by α TODO, flipped orientation
 function rotX(λ, θ, α)
     (
@@ -164,11 +147,6 @@ function sphericalmodeα(m,l,α)
     end
 end
 
-using GSL
-function legendre(m,l,x)
-    sf_legendre_sphPlm(l,m,x)
-end
-
 # returns a real scalar field F on long-lat grid,
 # with F(i,j) = f(2*pi*i/L, pi*j/M)
 function fillsphere(L, M, f)
@@ -186,13 +164,6 @@ function θsphere(L, M)
 end
 
 # a là Muraki
-using PyPlot
-function sphereplot(G)
-    clf()
-    L, M = size(G,1), size(G,2)
-    contourf(λsphere(L,M), θsphere(L,M), G, cmap=ColorMap("inferno"))
-end
-
 function demo01(m, l, output_filename)
     clf()
     L, M = 40, 20
