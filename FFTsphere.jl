@@ -38,7 +38,7 @@ function fftsphere(U)
         Uf[j, :] = fft( oddrefl(Um[j,:]) )[2:Nφ+1] .* Vshiftsin
     end
 
-    Uf 
+    Uf
 end
 
 # returns λ-φ values of U
