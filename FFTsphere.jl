@@ -1,6 +1,4 @@
 #TODO brainsweat
-module FFTsphere
-
 export fftsphere, ifftsphere
 
 # returns m-n fourier coefficients of U,
@@ -76,6 +74,4 @@ end
 
 function oddrefl(vec)
     [vec[:] ; -flipdim(vec,1)]
-end
-
 end

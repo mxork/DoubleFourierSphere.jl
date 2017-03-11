@@ -1,4 +1,4 @@
-module DiffMatrices
+export DAodd, DAeven, DAzero
 
 # following Cheong
 
@@ -64,7 +64,7 @@ function DAzero(N)
           for i in 0:N-1, j in 0:N-1
         ]
 
-    D[1,1] = 0 # from comment in Cheong
+    #D[1,1] = 0 # from comment in Cheong, but we need non-zero element otherwise singular
     D[3,1] = 0 # ditto
 
     A = [
@@ -81,6 +81,4 @@ function DAzero(N)
     # two more equalities given in Cheong that bewilder me
 
     return D, A
-end
-
 end

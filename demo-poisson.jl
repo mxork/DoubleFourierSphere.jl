@@ -1,16 +1,13 @@
-using Helper
-using FFTsphere
-using DiffMatrices
+using DoubleFourierSphere
 
-# poissson equation
+# poisson equation
+M = 1
+N = 1
 
-M = 4
-N = 4
-
-Λ, Φ = spheregrids(128,64)
+Λ, Φ = spheregrids(64,32)
 Θ = Φ + π/2
 
-G = fouriermode(M,N)(Λ, Θ) #forcing function
+G = sphericalmode(M,N)(Λ, Φ) #forcing function
 Gf = fftsphere(G)
 
 Uf = zeros(Gf) # same size, type
@@ -19,28 +16,24 @@ Uf = zeros(Gf) # same size, type
 n = size(Gf, 2)
 
 # m=0
-D, A = DAzero(n)
-Uf[1, :] = D \ A * Gf[1, :] # TODO ON THIS LINE ******
+#D, A = DAzero(n)
+#Uf[1, :] = D \ A * Gf[1, :] # TODO ON THIS LINE, singularity exception ******
 
 # m odd
 for mi in 2:2:size(Gf,1)
   m = mi-1
-  D, A = DAzero(n, m)
-  Uf[mi, :] = Dz \ Az * Gf[mi, :]
+  D, A = DAodd(n, m)
+  Uf[mi, :] = D \ A * Gf[mi, :]
 end
 
 # m even
 for mi in 3:2:size(Gf,1)
-
+  m = mi-1
+  D, A = DAeven(n, m)
+  Uf[mi, :] = D \ A * Gf[mi, :]
 end
 
-
-
-
-U =
-
-
-
+U = G # not actually true, but some scalar multiple since spheremode is eigenfunction
 Utest = ifftsphere(Uf) 
 
 # check idempotency
