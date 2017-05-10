@@ -23,9 +23,9 @@ function fftsphere(U)
     Uf[1,:] = real( fft( evenrefl(Um[1,:]) )[1:Nφ] .* Vshiftcos )
 
     # m even
-    # TODO make sense of the +1 shift of the frequencies,
-    # probably something with aliasing... but why is 0th entry bogus?
-    # => likely just to get it to line up nicely with the definition of Vshiftsin
+      # TODO make sense of the +1 shift of the frequencies,
+      # probably something with aliasing... but why is 0th entry bogus?
+      # => likely just to get it to line up nicely with the definition of Vshiftsin
     for j in 3:2:Nλ
         Um[j, :] = Um[j, :] .* Vsin
         Uf[j, :] = fft( oddrefl(Um[j, :]) )[2:Nφ+1] .* Vshiftsin
