@@ -1,35 +1,37 @@
 using DoubleFourierSphere
 
 # poisson equation
-M = 1
-N = 1
+M = 64 
+N = 32
 
-Λ, Φ = spheregrids(64,32)
+# wave numbers
+km = 0
+kn = 0
+
+Λ, Φ = spheregrids(M,N)
 Θ = Φ + π/2
 
-G = sphericalmode(M,N)(Λ, Φ) #forcing function
+G = sphericalmode(km,kn)(Λ, Φ) #forcing function
 Gf = fftsphere(G)
 
 Uf = zeros(Gf) # same size, type
 
-# n here is meridional wave resolution
-n = size(Gf, 2)
-
 # m=0
-#D, A = DAzero(n)
-#Uf[1, :] = D \ A * Gf[1, :] # TODO ON THIS LINE, singularity exception ******
+D, A = DAzero(N)
+Uf[1, :] = D \ A * Gf[1, :] # TODO ON THIS LINE, singularity exception ******
+Uf[1,1] = 0; # manual surgery to fix constant term.
 
 # m odd
 for mi in 2:2:size(Gf,1)
   m = mi-1
-  D, A = DAodd(n, m)
+  D, A = DAodd(N, m)
   Uf[mi, :] = D \ A * Gf[mi, :]
 end
 
 # m even
 for mi in 3:2:size(Gf,1)
   m = mi-1
-  D, A = DAeven(n, m)
+  D, A = DAeven(N, m)
   Uf[mi, :] = D \ A * Gf[mi, :]
 end
 

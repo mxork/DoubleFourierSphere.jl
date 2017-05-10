@@ -52,6 +52,7 @@ function DAeven(N, M)
     return D, A
 end
 
+# These are giving me trouble. I need to sit down and do algebra.
 function DAzero(N)
     M = 0 # by definition
 
@@ -75,10 +76,21 @@ function DAzero(N)
           for i in 1:N, j in 1:N
         ]
 
-    A[1,1] = 1/4
-    A[2,1] = -1/2 # actually A[2,1], since starting from zero on evens.
+    # my own guesses CRAP
+    # based off of sums of columns and rows
+    D[1,1] = 0
+    D[3,1] = 1/2
+
+    # remember, n=0,1,2,3,...
+    # A[2,2] = 1/4
+    # A[3,1] = -1/2 
 
     # two more equalities given in Cheong that bewilder me
+    # A[1,2] = -1/4
+    # D[1,2] = 1/2
+
+    # TODO as of right now, D is singular
+    D[1,1] = 1.0 # cheat, reset after solve
 
     return D, A
 end
