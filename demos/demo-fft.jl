@@ -1,10 +1,9 @@
-using Helper
-using FFTsphere
+using DoubleFourierSphere
 
 M = 4
-N = 4
+N = 3
 
-Gλ, Gφ = spheregrids(128,64)
+Gλ, Gφ = spheregrids(64,32)
 Gφc = Gφ + π/2
 
 U = fouriermode(M,N)(Gλ, Gφc)
