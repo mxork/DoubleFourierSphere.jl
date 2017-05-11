@@ -29,7 +29,7 @@ function cart2sph(Gx, Gy, Gz)
   sqrt(Gx .^2 + Gy .^2 + Gz.^2)
 end
 
-# returns the n-m fourier mode on the sphere,
+# returns the n-m spherical mode on the sphere,
 # m = λ wavenumber, longitude
 # n = θ wavenumber, latitude
 function sphericalmode(m,n)
@@ -37,7 +37,7 @@ function sphericalmode(m,n)
   # but as far as I can tell, Muraki's spherical harmonics are not right.
   # test case (m,n) = (2,2)
   # Seemingly, Muraki takes n = 2*n, which is strange
-  return (λ, θ) -> legendre(m,n,sin(θ)).*cos(m*λ)
+  return (λ, θ) -> legendre(m,n,sin(θ)) .* cos(m*λ)
 end
 
 # returns the n-m fourier mode on the sphere,

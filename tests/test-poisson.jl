@@ -1,4 +1,5 @@
 using DoubleFourierSphere
+using PyPlot
 
 # somewhat convoluted check to make sure G looks like U
 # (using eigenfunction)
@@ -16,21 +17,23 @@ function isScalarMultipleIsh(G, U)
 end
 
 # poisson equation
-M = 32
-N = 16
+M = 512
+N = 256
 
 # wave numbers
 Λ, Φ = spheregrids(M,N)
 
 G, U = 0, 0
 
-# currently breaking on km=0
-for kn in 1:3, km in 0:kn
+# currently breaking on km=0, AND (kn, km) = (4,4)
+for kn in 1:5, km in 0:kn
     G = sphericalmode(km,kn)(Λ, Φ) #forcing function
     U = invertPoisson(G)
 
     if !isScalarMultipleIsh(G, U)
         println("kn: $kn, km: $km")
-        @assert isScalarMultipleIsh(G, U)
+        plot( U[10, :] )
+        break
+        # @assert isScalarMultipleIsh(G, U)
     end
 end
