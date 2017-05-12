@@ -1,7 +1,34 @@
-export invertPoisson
+export laplace_sphere, laplace_sphere_inv
+
+# computes the laplacian of U over a sphere
+# FIXME there's damping on the m0, neven spherical modes?
+function laplace_sphere(U)
+    X, Y = size(U)
+    Uf = fftsphere(U)
+    Gf = zeros(Uf)
+
+    D, A = DAzero( size(Uf) )
+    Gf[1, :] = A \ D * Uf[1, :] 
+
+    # m odd
+    for mi in 2:2:size(Gf,1)
+        m = mi-1
+        DAodd!(D, A, m)
+        Gf[mi, :] = A \ D * Uf[mi, :]
+    end
+
+    # m even
+    for mi in 3:2:size(Gf,1)
+        m = mi-1
+        DAeven!(D, A, m)
+        Gf[mi, :] = A \ D * Uf[mi, :]
+    end
+
+    ifftsphere(Gf)
+end
 
 # solve ΔU = G
-function invertPoisson(G)
+function laplace_sphere_inv(G)
     X, Y = size(G)
 
     Gf = fftsphere(G)
@@ -13,6 +40,8 @@ function invertPoisson(G)
     D, A = DAzero( size(Gf) )
 
     # some hands on surgery to fix constant term.
+    # TODO this constant term is trickier than expected,
+    # since m0, neven modes have a non-zero (0,0) component
     # god, I hope this gets compiles into something better
     Uf[1, 2:end] = D[:, 2:end] \ A * Gf[1, :] 
     Uf[1,1] = 0
@@ -131,7 +160,7 @@ function DAzero!(D, A)
     A[2,2] = 1/4
     A[3,1] = -1/2
 
-    # two more equalities given in Cheong that bewilder me
+    # two more equalities given in Cheong
     A[1,3] = -1/4
     D[1,3] = 1/2
 end

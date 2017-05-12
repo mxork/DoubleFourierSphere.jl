@@ -50,7 +50,7 @@ function ifftsphere(Uf)
     Um = zeros(Complex128, size(Uf))
     U = zeros(Float64, 2*Nλ, Nφ)
 
-    # TODO why do we 0 out the (N/2)th frequency but not the 0th?
+    # TODO why do we 0 out the (N/2)th frequency but not the 0th? Answer:
     Um[1, :] = ifft(  [ Uf[1, :] ; 0.0 ; -Uf[1, Nφ:-1:2] ] .* Vunshiftcos )[1:Nφ]
 
     # m even
