@@ -6,7 +6,7 @@ N = 64
 Λ, Φ = spheregrids(M,N)
 
 # check eigenfunction-ness for non-constant modes
-for kn in 1:5, km in 1:kn
+for kn in 0:5, km in 0:kn
     U = sphericalmode(km,kn)(Λ, Φ) #forcing function
     G = laplace_sphere(U)
 

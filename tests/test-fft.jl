@@ -1,21 +1,30 @@
-    using DoubleFourierSphere
+using DoubleFourierSphere
+
+using DoubleFourierSphere
 
 X=128
 Y=64
 Gl, Gp = spheregrids(X, Y)
 
-# check mode shows up in the right plac
+#check mode shows up in the right place
 for M in 0:3
     for N in 0:3
+        # these modes are degenerate
+        if M!=0 && N==0
+            continue
+        end
+        # slight not lining up
+        Mi = M+1
+        Ni = M == 0 ? N+1 : N
+
         U = fouriermode(M,N)(Gl, Gp)
         Uf = fftsphere(U)
 
-        println("M: $M, N: $N")
         # most of the energy should be here
-        @show abs(Uf[M+1, N+1]) == maximum(abs(Uf))
+        @assert abs(Uf[Mi, Ni]) == maximum(abs(Uf))
 
-        Uf[M+1, N+1] = 0
-        @show norm(Uf) < 1.0
-        println()
+        Uf[Mi, Ni] = 0
+        @assert norm(Uf) < 1.0
     end
 end
+

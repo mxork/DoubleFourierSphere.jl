@@ -10,7 +10,7 @@ end
 # takes resolution in latitude, longitude as input.
 function spheregrids(Nλ::Int, Nφ::Int)
   dλ, dφ = 2*π / Nλ, π/Nφ
-  return [λ for λ in -π:dλ:(π-dλ/2), _ in 1:Nφ], [φ for _ in 1:Nλ, φ in (-π+dφ)/2:dφ:π/2]
+  return [λ for λ in -π:dλ:(π-dλ/2), _ in 1:Nφ], [φ for _ in 1:Nλ, φ in π*((0:Nφ-1) .+ 0.5)/Nφ]
 end
 
 # spherical to cartesian; should match MATLAB spec
@@ -37,7 +37,7 @@ function sphericalmode(m,n)
   # but as far as I can tell, Muraki's spherical harmonics are not right.
   # test case (m,n) = (2,2)
   # Seemingly, Muraki takes n = 2*n, which is strange
-  return (λ, θ) -> legendre(m,n,sin(θ)) .* cos(m*λ)
+  return (λ, θ) -> legendre(m,n,cos(θ)) .* cos(m*λ)
 end
 
 # returns the n-m fourier mode on the sphere,
