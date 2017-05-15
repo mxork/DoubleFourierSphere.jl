@@ -1,25 +1,30 @@
 export laplace_sphere, laplace_sphere_inv
 
+#TODO clean up the interfaces after screwing with FFT code, esp. dimension
+
 # computes the laplacian of U over a sphere
 # FIXME there's damping on the m0, neven spherical modes?
 function laplace_sphere(U)
-    X, Y = size(U)
     Uf = fftsphere(U)
     Gf = zeros(Uf)
 
+    # m zero
     D, A = DAzero( size(Uf) )
     Gf[1, :] = A \ D * Uf[1, :] 
 
+    M = convert(Int64, round(size(Gf,1)/2))
+    Ms = [0:M-1 ; -M:-1]
+
     # m odd
     for mi in 2:2:size(Gf,1)
-        m = mi-1
+        m = Ms[mi]
         DAodd!(D, A, m)
         Gf[mi, :] = A \ D * Uf[mi, :]
     end
 
     # m even
     for mi in 3:2:size(Gf,1)
-        m = mi-1
+        m = Ms[mi]
         DAeven!(D, A, m)
         Gf[mi, :] = A \ D * Uf[mi, :]
     end
@@ -29,15 +34,16 @@ end
 
 # solve ΔU = G
 function laplace_sphere_inv(G)
-    X, Y = size(G)
-
     Gf = fftsphere(G)
     Uf = zeros(Gf) # same size, type
 
+    M = convert(Int64, round(size(Gf,1)/2))
+    Ms = [0:M-1 ; -M:-1]
 
     # setup differentiation matrices
     # m=0
-    D, A = DAzero( size(Gf) )
+    J = size(Gf,2)
+    D, A = DAzero( (J,J) )
 
     # some hands on surgery to fix constant term.
     # TODO this constant term is trickier than expected,
@@ -48,14 +54,14 @@ function laplace_sphere_inv(G)
 
     # m odd
     for mi in 2:2:size(Gf,1)
-        m = mi-1
+        m = Ms[mi]
         DAodd!(D, A, m)
         Uf[mi, :] = D \ A * Gf[mi, :]
     end
 
     # m even
     for mi in 3:2:size(Gf,1)
-        m = mi-1
+        m = Ms[mi]
         DAeven!(D, A, m)
         Uf[mi, :] = D \ A * Gf[mi, :]
     end

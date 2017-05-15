@@ -1,12 +1,12 @@
 using DoubleFourierSphere
 
-M = 128
-N = 64
+M = 64
+N = 32
 
 Λ, Φ = spheregrids(M,N)
 
 # check eigenfunction-ness for non-constant modes
-for kn in 0:5, km in 0:kn
+for kn in 1:5, km in 0:kn
     U = sphericalmode(km,kn)(Λ, Φ) #forcing function
     G = laplace_sphere(U)
 

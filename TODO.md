@@ -1,13 +1,18 @@
 # Status
 
-need to recode the fft/ifft routine so that the fourier modes
-line up with the computed coefficients, or justify to myself that
-the mismatch comes from somewhere else.
+Shadowed the fast sphere transform with some naive ones; they
+go plenty fast for the size of data I'm working on. Fixed 
+some dimensional issues where I had assumed real input.
+FFT/IFFT tests are passing, as is forward laplace. Inverse
+laplace is breaking, but only off by a constant term. This
+is because I set the constant-mode coefficient to zero during
+the inversion process, when I should be setting it to the appropriate
+power level of the spherical harmonic (it is non-zero, somewhat
+unexpectedly). 
 
-then we can address the damping of the Neven, M0 modes in the laplace routine
-(I suspect is related).
+Gonna look up the formula, plop it in, test and should be g2go. Can
+either revisit the fast transforms and hack out the details (worthwhile?),
+Can also add some '_into' versions of the solvers to speed up the iteration
+we'll be doing in the next section:
 
-*ANSWER*: there is a mismatch between muraki's coefficients and Cheong's 
-(see §2-8, constants b, c), which are getting in the works when we setup
-the linear systems. probably can just hack in the appropriate constants
-in the fft routines (or reimplement and use naive as weather rod).
+*Timestepping*.
