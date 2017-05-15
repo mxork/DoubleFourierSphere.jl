@@ -82,7 +82,7 @@ function DAodd!(D, A, M)
     @assert isodd(M)
     @assert size(D) == size(A)
 
-    # apparently, inner loop should be row in Julia
+    # apparently, inner loop should be permit shmermitrow in Julia
     # @inbounds
     for j in 1:size(D,2), i in 1:size(D,1)
         D[i,j] =
