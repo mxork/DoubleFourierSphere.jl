@@ -1,4 +1,4 @@
-export fftsphere, ifftsphere
+export fftsphere, ifftsphere, plan_fft_sphere
 
 # returns m-n fourier coefficients of U,
 # looks good
@@ -11,7 +11,6 @@ function fft_sphere(U)
     # TODO understand wtf, from Muraki
     # pretty sure this is all just for dealing with interior grid, plus some other
     # ops which got rolled in
-    # F(f(x-z))(k) = e^ikx F(f(x)), missing a 2 somewhere
     Ts = (π/2) * (0:Nφ-1) / Nφ # first quarter circle?
     Vshiftcos = exp( -1.0im * Ts )
     Vshiftsin = -Vshiftcos * exp(1.0im*π/2 * (1 - 1/Nφ)) # take this on faith
@@ -184,3 +183,68 @@ end
 # no "as" for export renaming in Julia
 fftsphere = ft_sphere
 ifftsphere = ift_sphere
+
+# only uses dims of U here
+# MARK β, which is where I compensate for a quarter turn in this output (does it matter?)
+# FIXME using an oddreflection doubles at least one of the modes, so need to compensate for that
+function plan_fft_sphere(U)
+    Um = zeros(Complex128, U)
+
+    # we're offset by half a Δφ
+    # F(f(x-z))(k) = e^ikz F(f(x)), missing a 2 somewhere
+    Nφ = size(U,2)
+    Jφ = Int( floor(Nφ/2) ) # FIXME gonna ignore odd-count input
+
+    # two different sets of frequencies → different shifts
+    # β: the last term within the exp(...) is weird, but
+    Ns0 = 0:Nφ-1
+    interior_grid_shift0 = exp( -1.0im * Ns0 * (π/Nφ/2) + 1.0im*π/2)
+
+    Ns = 1:Nφ
+    interior_grid_shift = exp( -1.0im * Ns * (π/Nφ/2) + 1.0im*π/2)
+
+    # interior grid pole condition scale for even modes
+    Φs = Complex128[ π*(j+0.5)/Nφ for j in 0:Nφ-1]
+    pole_scale = sin(Φs)
+
+    # pre plan fft
+    F = plan_fft(U,1)
+
+    C = plan_dct(Um[1, :])
+
+    # v is just a slot for shoving in an odd reflection # OPTIMIZE POINT
+    v = [ Um[1, :] ; -Um[1, end:-1:1] ]
+    Fs = plan_fft(v)
+
+    # returns a function which fourier sphere transforms
+    # U (shadows the closed one) into Uf
+    return function (Uf, U)
+        # longitudinal
+        Um[:,:] = F*U
+
+        # m zero
+        Uf[1, :] = C * Um[1, :]
+        Uf[1, :] .*= interior_grid_shift0
+
+        # m odd
+        for mi in 2:2:size(U,1)
+            v[:] = [ Um[mi, :] ; -Um[mi, end:-1:1] ]
+            v[:] = Fs*v
+            Uf[mi, :] = v[2:Nφ+1]      # drop the zeroth freq
+            Uf[mi, :] .*= interior_grid_shift
+        end
+
+        # m even
+        for mi in 3:2:size(U,1)
+            Um[mi, :] .*= pole_scale
+            v[:] = [ Um[mi, :] ; -Um[mi, end:-1:1] ]
+            v[:] = Fs*v
+            Uf[mi, :] = v[2:Nφ+1]
+            Uf[mi, :] .*= interior_grid_shift
+        end
+    end
+end
+
+function plan_ifft_sphere(Uf)
+
+end
