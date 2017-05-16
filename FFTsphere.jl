@@ -1,4 +1,4 @@
-export fftsphere, ifftsphere, plan_fft_sphere
+export fftsphere, ifftsphere, plan_fft_sphere, plan_ifft_sphere
 
 # returns m-n fourier coefficients of U,
 # looks good
@@ -21,9 +21,9 @@ function fft_sphere(U)
     Uf[1,:] = real( fft( evenrefl(Um[1,:]) )[1:Nφ] .* Vshiftcos )
 
     # m even
-      # TODO make sense of the +1 shift of the frequencies,
-      # probably something with aliasing... but why is 0th entry bogus?
-      # => likely just to get it to line up nicely with the definition of Vshiftsin
+    # TODO make sense of the +1 shift of the frequencies,
+    # probably something with aliasing... but why is 0th entry bogus?
+    # => likely just to get it to line up nicely with the definition of Vshiftsin
     for j in 3:2:Nλ
         Um[j, :] = Um[j, :] .* Vsin
         Uf[j, :] = fft( oddrefl(Um[j, :]) )[2:Nφ+1] .* Vshiftsin
@@ -184,8 +184,9 @@ end
 fftsphere = ft_sphere
 ifftsphere = ift_sphere
 
+# TODO typeswitch on U real/complex below here
+
 # only uses dims of U here
-# MARK β, which is where I compensate for a quarter turn in this output (does it matter?)
 # FIXME using an oddreflection doubles at least one of the modes, so need to compensate for that
 function plan_fft_sphere(U)
     Um = zeros(Complex128, U)
@@ -193,43 +194,44 @@ function plan_fft_sphere(U)
     # we're offset by half a Δφ
     # F(f(x-z))(k) = e^ikz F(f(x)), missing a 2 somewhere
     Nφ = size(U,2)
-    Jφ = Int( floor(Nφ/2) ) # FIXME gonna ignore odd-count input
 
     # two different sets of frequencies → different shifts
-    # β: the last term within the exp(...) is weird, but
     Ns0 = 0:Nφ-1
-    interior_grid_shift0 = exp( -1.0im * Ns0 * (π/Nφ/2) + 1.0im*π/2)
+    interior_grid_shift0 = exp( -1.0im * Ns0 * (π/Nφ/2))
 
     Ns = 1:Nφ
     interior_grid_shift = exp( -1.0im * Ns * (π/Nφ/2) + 1.0im*π/2)
 
     # interior grid pole condition scale for even modes
     Φs = Complex128[ π*(j+0.5)/Nφ for j in 0:Nφ-1]
-    pole_scale = sin(Φs)
+    pole_scale = 1 ./ sin(Φs)
 
     # pre plan fft
     F = plan_fft(U,1)
 
-    C = plan_dct(Um[1, :])
-
     # v is just a slot for shoving in an odd reflection # OPTIMIZE POINT
     v = [ Um[1, :] ; -Um[1, end:-1:1] ]
-    Fs = plan_fft(v)
+    # inplace fft
+    Fs = plan_fft!(v)
 
     # returns a function which fourier sphere transforms
     # U (shadows the closed one) into Uf
     return function (Uf, U)
         # longitudinal
-        Um[:,:] = F*U
+        # Um[:,:] = F*U
+        A_mul_B!(Um, F, U) 
 
         # m zero
-        Uf[1, :] = C * Um[1, :]
+        # Uf[1, :] = C * Um[1, :]
+        v[:] = [ Um[1, :] ; Um[1, end:-1:1] ] #even
+        Fs*v #inplace
+        Uf[1, :] = v[1:Nφ]
         Uf[1, :] .*= interior_grid_shift0
 
         # m odd
         for mi in 2:2:size(U,1)
             v[:] = [ Um[mi, :] ; -Um[mi, end:-1:1] ]
-            v[:] = Fs*v
+            Fs*v #warning: this is IN-PLACE
             Uf[mi, :] = v[2:Nφ+1]      # drop the zeroth freq
             Uf[mi, :] .*= interior_grid_shift
         end
@@ -238,13 +240,77 @@ function plan_fft_sphere(U)
         for mi in 3:2:size(U,1)
             Um[mi, :] .*= pole_scale
             v[:] = [ Um[mi, :] ; -Um[mi, end:-1:1] ]
-            v[:] = Fs*v
+            Fs*v #warning: this is IN-PLACE
             Uf[mi, :] = v[2:Nφ+1]
             Uf[mi, :] .*= interior_grid_shift
         end
     end
 end
 
+# in an ideal world, this would use the coupled inverse
+# procedures of the forward FT, but 'cause we're doing other
+# things, just split it off
 function plan_ifft_sphere(Uf)
+    Um = zeros(Complex128, Uf)
 
+    Nφ = size(Uf, 2)
+
+    # unshifts: argument is -ve of shift
+    Ns0 = 0:Nφ-1
+    interior_grid_unshift0 = exp( 1.0im * Ns0 * (π/Nφ/2))
+
+    Ns = 1:Nφ
+    interior_grid_unshift = exp( +1.0im * Ns * (π/Nφ/2) - 1.0im*π/2)
+
+    #
+    Φs = Complex128[ π*(j+0.5)/Nφ for j in 0:Nφ-1]
+    pole_scale = sin(Φs)
+
+    # plan fts
+    Fi = plan_ifft(Um, 1)
+    v = [ 0.0 ; Uf[1, :] ; Uf[1, end:-1:2] ]
+    u = view(v, 1:Nφ) # this is an undoubled view into v
+
+    # INPLACE
+    Fsi = plan_ifft!(v)
+
+    # swapped, using v as workspace
+    function (U, Uf)
+        # start going backwards
+
+        # zero
+        u[:] = Uf[1,:]
+        u[:] .*= interior_grid_unshift0
+        v[:] = [ u[:] ; 0.0 ; u[end:-1:2] ] #even
+        Fsi*v
+        Um[1, :] = u[:]
+
+        # odd
+        for mi in 2:2:size(Um,1)
+            u[:] = Uf[mi,:]
+            u[:] .*= interior_grid_unshift
+            v[:] = [ 0.0 ; u[:] ; -u[end-1:-1:1] ]
+
+            Fsi*v # IN PLACE
+
+            Um[mi, :] = u[:]
+        end
+
+        # even
+        for mi in 3:2:size(Um,1)
+            u[:] = Uf[mi,:]
+            u[:] .*= interior_grid_unshift
+            v[:] = [ 0.0 ; u[:] ; -u[end-1:-1:1] ]
+
+            Fsi*v # IN PLACE
+
+            u[:] .*= pole_scale
+            Um[mi, :] = u[:]
+        end
+
+        # longitudinal
+        A_mul_B!(U, Fi, Um)
+    end
 end
+
+
