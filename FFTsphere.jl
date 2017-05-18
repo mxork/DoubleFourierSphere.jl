@@ -189,7 +189,7 @@ ifftsphere = ift_sphere
 # only uses dims of U here
 # FIXME using an oddreflection doubles at least one of the modes, so need to compensate for that
 function plan_fft_sphere(U)
-    Um = zeros(Complex128, U)
+    Um = Array{Complex128}(size(U))
 
     # we're offset by half a Δφ
     # F(f(x-z))(k) = e^ikz F(f(x)), missing a 2 somewhere
@@ -206,13 +206,13 @@ function plan_fft_sphere(U)
     Φs = Complex128[ π*(j+0.5)/Nφ for j in 0:Nφ-1]
     pole_scale = 1 ./ sin(Φs)
 
-    # pre plan fft
+    # pre plan ffts
     F = plan_fft(U,1)
 
     # v is just a slot for shoving in an odd reflection # OPTIMIZE POINT
     v = [ Um[1, :] ; -Um[1, end:-1:1] ]
-    # inplace fft
-    Fs = plan_fft!(v)
+    w = similar(v)
+    Fs = plan_fft(v)
 
     # returns a function which fourier sphere transforms
     # U (shadows the closed one) into Uf
@@ -224,15 +224,19 @@ function plan_fft_sphere(U)
         # m zero
         # Uf[1, :] = C * Um[1, :]
         v[:] = [ Um[1, :] ; Um[1, end:-1:1] ] #even
-        Fs*v #inplace
-        Uf[1, :] = v[1:Nφ]
+
+        A_mul_B!(w, Fs, v)
+
+        Uf[1, :] = w[1:Nφ]
         Uf[1, :] .*= interior_grid_shift0
 
         # m odd
         for mi in 2:2:size(U,1)
             v[:] = [ Um[mi, :] ; -Um[mi, end:-1:1] ]
-            Fs*v #warning: this is IN-PLACE
-            Uf[mi, :] = v[2:Nφ+1]      # drop the zeroth freq
+
+            A_mul_B!(w, Fs, v)
+
+            Uf[mi, :] = w[2:Nφ+1]      # drop the zeroth freq
             Uf[mi, :] .*= interior_grid_shift
         end
 
@@ -240,8 +244,10 @@ function plan_fft_sphere(U)
         for mi in 3:2:size(U,1)
             Um[mi, :] .*= pole_scale
             v[:] = [ Um[mi, :] ; -Um[mi, end:-1:1] ]
-            Fs*v #warning: this is IN-PLACE
-            Uf[mi, :] = v[2:Nφ+1]
+
+            A_mul_B!(w, Fs, v)
+
+            Uf[mi, :] = w[2:Nφ+1]
             Uf[mi, :] .*= interior_grid_shift
         end
     end
@@ -250,8 +256,9 @@ end
 # in an ideal world, this would use the coupled inverse
 # procedures of the forward FT, but 'cause we're doing other
 # things, just split it off
+# I should remove u from this code. it is confusing
 function plan_ifft_sphere(Uf)
-    Um = zeros(Complex128, Uf)
+    Um = Array{Complex128}(size(Uf))
 
     Nφ = size(Uf, 2)
 
@@ -268,11 +275,12 @@ function plan_ifft_sphere(Uf)
 
     # plan fts
     Fi = plan_ifft(Um, 1)
-    v = [ 0.0 ; Uf[1, :] ; Uf[1, end:-1:2] ]
-    u = view(v, 1:Nφ) # this is an undoubled view into v
+    v = [ 0.0 ; Uf[1, :]... ; Uf[1, end:-1:2]... ]
+    w = similar(v)
+    u = view(w, 1:Nφ) # this is an undoubled view into w
 
     # INPLACE
-    Fsi = plan_ifft!(v)
+    Fsi = plan_ifft(v)
 
     # swapped, using v as workspace
     function (U, Uf)
@@ -282,7 +290,9 @@ function plan_ifft_sphere(Uf)
         u[:] = Uf[1,:]
         u[:] .*= interior_grid_unshift0
         v[:] = [ u[:] ; 0.0 ; u[end:-1:2] ] #even
-        Fsi*v
+
+        A_mul_B!(w, Fsi, v)
+
         Um[1, :] = u[:]
 
         # odd
@@ -291,7 +301,7 @@ function plan_ifft_sphere(Uf)
             u[:] .*= interior_grid_unshift
             v[:] = [ 0.0 ; u[:] ; -u[end-1:-1:1] ]
 
-            Fsi*v # IN PLACE
+            A_mul_B!(w, Fsi, v)
 
             Um[mi, :] = u[:]
         end
@@ -302,7 +312,7 @@ function plan_ifft_sphere(Uf)
             u[:] .*= interior_grid_unshift
             v[:] = [ 0.0 ; u[:] ; -u[end-1:-1:1] ]
 
-            Fsi*v # IN PLACE
+            A_mul_B!(w, Fsi, v)
 
             u[:] .*= pole_scale
             Um[mi, :] = u[:]
