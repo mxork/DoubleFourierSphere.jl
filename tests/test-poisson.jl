@@ -8,7 +8,6 @@ N = 32
 # for a variety of modes, check inversion property of 
 # laplace - inverse laplace
 # note the arbitrary constant we compensate for
-@profile
 for kn in 1:5, km in 0:kn
     U = sphericalmode(km,kn)(Λ, Φ) #forcing function
     G = laplace_sphere(U)

@@ -35,6 +35,13 @@ end
 # solve ΔU = G
 function laplace_sphere_inv(G)
     Gf = fftsphere(G)
+
+    Uf = laplace_sphere_inv_spectral(Gf)
+
+    ifftsphere(Uf)
+end
+
+function laplace_sphere_inv_spectral(Gf)
     Uf = zeros(Gf) # same size, type
 
     M = convert(Int64, round(size(Gf,1)/2))
@@ -65,8 +72,6 @@ function laplace_sphere_inv(G)
         DAeven!(D, A, m)
         Uf[mi, :] = D \ A * Gf[mi, :]
     end
-
-    ifftsphere(Uf)
 end
 
 # each of these has two forms, one of which accepts a result buffer
@@ -82,7 +87,7 @@ function DAodd!(D, A, M)
     @assert isodd(M)
     @assert size(D) == size(A)
 
-    # apparently, inner loop should be permit shmermitrow in Julia
+    # apparently, inner loop should be first in Julia
     # @inbounds
     for j in 1:size(D,2), i in 1:size(D,1)
         D[i,j] =
