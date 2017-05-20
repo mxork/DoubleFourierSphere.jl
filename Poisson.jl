@@ -1,4 +1,4 @@
-export laplace_sphere, laplace_sphere_inv
+export laplace_sphere, laplace_sphere_inv, laplace_sphere_inv_spectral
 
 #TODO clean up the interfaces after screwing with FFT code, esp. dimension
 
@@ -72,6 +72,8 @@ function laplace_sphere_inv_spectral(Gf)
         DAeven!(D, A, m)
         Uf[mi, :] = D \ A * Gf[mi, :]
     end
+
+    Uf
 end
 
 # each of these has two forms, one of which accepts a result buffer

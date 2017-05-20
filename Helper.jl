@@ -1,8 +1,4 @@
-export legendre, spheregrids, sphericalmode, fouriermode, sphereplot,
-
-function mi(Uf)
-    size()
-end
+export legendre, spheregrids, sphericalmode, fouriermode, sphereplot
 
 # associated legendre polynomial 
 import GSL.sf_legendre_sphPlm
