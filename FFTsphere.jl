@@ -1,4 +1,4 @@
-export fftsphere, ifftsphere, plan_fft_sphere, plan_ifft_sphere
+export fftsphere, ifftsphere, plan_fft_sphere!, plan_ifft_sphere!
 export modes_from_indices, indices_from_modes
 
 #### Naive implementation
@@ -115,8 +115,8 @@ ifftsphere = ift_sphere
 
 # only uses dims of U here
 # FIXME using an oddreflection doubles at least one of the modes, so need to compensate for that
-function plan_fft_sphere(U)
-    Um = Array{Complex128}(size(U))
+function plan_fft_sphere!(U)
+    Um = similar(U, Complex128)
 
     # we're offset by half a Δφ
     # F(f(x-z))(k) = e^ikz F(f(x)), missing a 2 somewhere
@@ -183,8 +183,15 @@ end
 # in an ideal world, this would use the coupled inverse
 # procedures of the forward FT, but 'cause we're doing other
 # things, just split it off
-# I should remove u from this code. it is confusing
-function plan_ifft_sphere(Uf)
+
+# this is a dummy cause I don't trust the actual ifft yet
+function plan_ifft_sphere!(Uf)
+    function (U, Uf)
+        U[:] = ift_sphere(Uf)
+    end
+end
+
+function plan_ifft_sphere_fast!(Uf)
     Um = Array{Complex128}(size(Uf))
 
     Nφ = size(Uf, 2)

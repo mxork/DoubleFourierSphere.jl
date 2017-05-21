@@ -1,4 +1,5 @@
 export legendre, spheregrids, sphericalmode, fouriermode, sphereplot
+export zonal_modes, meridional_modes, latitude_interior_grid
 
 # associated legendre polynomial 
 import GSL.sf_legendre_sphPlm
@@ -59,4 +60,24 @@ function sphereplot(G)
   clf()
   M, N = size(G,1), size(G,2)
   contourf(spheregrids(M, N)..., G, cmap=ColorMap("inferno"))
+end
+
+# returns maximal wavenumber and iterable of
+# wavenumbers
+function zonal_modes(A)
+    M = Int(round(size(A,1)/2))
+    Ms = [0:M-1 ; -M:-1]
+    return M, Ms
+end
+
+function meridional_modes(A)
+    N = size(A,2)
+    Ns0 = 0:N-1
+    Ns = 1:N
+    return N, Ns0, Ns
+end
+
+function latitude_interior_grid(A)
+    N = size(A, 2)
+    Φs = [ π*(j+0.5)/N for j in 0:N-1]
 end

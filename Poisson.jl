@@ -1,9 +1,9 @@
 export laplace_sphere, laplace_sphere_inv, laplace_sphere_inv_spectral
+export plan_laplace_inv!
 
 #TODO clean up the interfaces after screwing with FFT code, esp. dimension
 
 # computes the laplacian of U over a sphere
-# FIXME there's damping on the m0, neven spherical modes?
 function laplace_sphere(U)
     Uf = fftsphere(U)
     Gf = zeros(Uf)
@@ -74,6 +74,54 @@ function laplace_sphere_inv_spectral(Gf)
     end
 
     Uf
+end
+
+# these need reworking - all the DA functions
+# throw a lot of garbage
+# ugly as hell
+function plan_laplace_inv!(Gf)
+    M, Ms = zonal_modes(Gf)
+    N, Ns0, Ns = meridional_modes(Gf)
+
+    # precompute all the matrices; uses
+    # a lot of space, but we're going to be using them
+    # often
+
+    # gonna be backsolving D, so LU it
+    Ds = Array{ SparseArrays.UMFPACK.UmfpackLU, 1 }( size(Ms) )
+    As = Array{ SparseMatrixCSC{Float64, Int64}, 1 }( size(Ms) )
+
+    D = Array{Float64, 2}(N, N)
+    A = similar(D)
+
+    for mi in 1:size(Ms,1)
+        m = Ms[mi]
+
+        if m == 0
+            DAzero!(D, A)
+            D[1,1] = 1.0
+        elseif isodd(m)
+            DAodd!(D, A, m)
+        else
+            DAeven!(D, A, m)
+        end
+
+        Ds[mi] = lufact(sparse(D))
+        As[mi] = sparse(A)
+    end
+
+    function (Uf, Gf)
+        # zero is a special case
+        Uf[1, :] = Ds[1] \ (As[1] * Gf[1, :] )
+        Uf[1,1] = 0
+
+        for mi in 2:size(Ms,1)
+            D, A = Ds[mi], As[mi]
+            Uf[mi, :] = D \ (A * Gf[mi, :])
+        end
+
+        Uf
+    end
 end
 
 # each of these has two forms, one of which accepts a result buffer
