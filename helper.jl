@@ -1,4 +1,4 @@
-    export legendre, spheregrids, sphericalmode, fouriermode, plot_sphere, plot_frequency
+export legendre, spheregrids, sphericalmode, fouriermode, plot_sphere, plot_frequency
 export zonal_modes, meridional_modes, latitude_interior_grid
 
 # associated legendre polynomial 
@@ -50,23 +50,21 @@ function fouriermode(m, n)
     end
 end
 
+# FIXME
+import Plots
+
 # plots the 2D matrix G on our canonical sphere
-using PyPlot: contourf, ColorMap, clf
-function plot_sphere(G)
-    clf()
-    X, Y = size(G,1), size(G,2)
-    
-    contourf(spheregrids(X, Y)..., G, cmap=ColorMap("inferno"))
+function plot_sphere(G, title::String = "")
+    Plots.heatmap(longitude_grid(G), latitude_interior_grid(G), G, title=title)
 end
 
 # ditto, but in frequency space, so no contour
 # TODO make something prettier
-function plot_frequency(Gf)
-    clf()
+function plot_frequency(Gf, title::String = "")
     M, Ms = zonal_modes(Gf)
     N, Ns0, Ns = meridional_modes(Gf)
 
-    contourf(Ns, Ms, abs(Gf), cmap=ColorMap("inferno"))
+    Plots.heatmap(Ms, Ns, Gf, title=title)
 end
 
 # returns maximal wavenumber and iterable of
@@ -84,7 +82,13 @@ function meridional_modes(A)
     return N, Ns0, Ns
 end
 
+function longitude_grid(A)
+    X = size(A,1)
+    0:2*pi/X:(2*pi-1/X)
+end
+
 function latitude_interior_grid(A)
     N = size(A, 2)
-    Φs = [ π*(j+0.5)/N for j in 0:N-1]
+    # Φs = [ π*(j+0.5)/N for j in 0:N-1]
+    Φs = 0.5*π/N:π/N:π*(1-0.5*1/N)
 end

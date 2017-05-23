@@ -40,15 +40,25 @@ function plan_dζf!(Zf)
     function (dζf, Zf, Ff)
         Hf[:] = Zf + Ff
         laplace_inv_into!(Ψf, Zf)
+        @assert maximum(abs(Ψf)) < 1e10 
 
         A_mul_B!(Hλf, Mscale, Hf)
+        @assert maximum(abs(Hλf)) < 1e10 
+
         sinφdφ_into!(Hφf, Hf)
+        @assert maximum(abs(Hφf)) < 1e10 
+
         Hφf *= -1.0
 
         A_mul_B!(Vf, Mscale, Ψf)
+        @assert maximum(abs(Vf)) < 1e10 
+
         sinφdφ_into!(Uf, Ψf)
+        @assert maximum(abs(Uf)) < 1e10 
 
         XY_into!(Xf, Yf, Uf, Vf, Hλf, Hφf)
+        @assert maximum(abs(Xf)) < 1e10 
+        @assert maximum(abs(Yf)) < 1e10 
 
         dζf[:] = -Xf -Yf
         dζf .*= lat_trunc_mask

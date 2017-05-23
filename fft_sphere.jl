@@ -163,13 +163,15 @@ function plan_fft_sphere!(U)
             Uf[mi, :] = w[2:Nφ+1]
             Uf[mi, :] .*= interior_grid_shift
         end
+
+        Uf /= size(Uf, 2) #normalize
     end
 end
 
 # this is a dummy cause I don't trust the actual ifft yet
 function plan_ifft_sphere!(Uf)
     function (U, Uf)
-        U[:] = ift_sphere(Uf)
+        U[:] = ift_sphere(Uf) 
     end
 end
 
