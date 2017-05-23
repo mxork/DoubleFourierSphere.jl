@@ -1,16 +1,6 @@
-export fftsphere, ifftsphere, plan_fft_sphere!, plan_ifft_sphere!
-export modes_from_indices, indices_from_modes
+export fft_sphere, ifft_sphere, plan_fft_sphere!, plan_ifft_sphere!
 
-#### Naive implementation
-
-# can we can still FFT through λ direction,
-# but we implement the naive algorithm for
-# computing the fourier coefficients
-
-# even the for loops here are probably silly;
-# could rewrite if I knew the conventions better.
-
-# note the lack of an extra "f"
+# Naive implementation of the transform
 function ft_sphere(U)
     # quantities?
     Nλ, Nφ = size(U)
@@ -106,15 +96,11 @@ function ift_sphere(Uf)
     U = ifft(Um, 1)
 end
 
-# export the slow ones for now;
-# no "as" for export renaming in Julia
-fftsphere = ft_sphere
-ifftsphere = ift_sphere
+# export the slow ones for now
+fft_sphere = ft_sphere
+ifft_sphere = ift_sphere
 
-# TODO typeswitch on U real/complex below here
-
-# only uses dims of U here
-# FIXME using an oddreflection doubles at least one of the modes, so need to compensate for that
+# FIXME specially treat the 0th and nth mode
 function plan_fft_sphere!(U)
     Um = similar(U, Complex128)
 
@@ -180,10 +166,6 @@ function plan_fft_sphere!(U)
     end
 end
 
-# in an ideal world, this would use the coupled inverse
-# procedures of the forward FT, but 'cause we're doing other
-# things, just split it off
-
 # this is a dummy cause I don't trust the actual ifft yet
 function plan_ifft_sphere!(Uf)
     function (U, Uf)
@@ -191,6 +173,8 @@ function plan_ifft_sphere!(Uf)
     end
 end
 
+# FIXME we have weird behaviour still on the m even modes
+# FIXME specially treat the 0th and nth mode
 function plan_ifft_sphere_fast!(Uf)
     Um = Array{Complex128}(size(Uf))
 
@@ -255,15 +239,6 @@ function plan_ifft_sphere_fast!(Uf)
         # longitudinal
         A_mul_B!(U, Fi, Um)
     end
-end
-
-# following returns even/odd periodic completion of input vector
-function evenrefl(vec)
-    [vec[:] ; flipdim(vec,1)]
-end
-
-function oddrefl(vec)
-    [vec[:] ; -flipdim(vec,1)]
 end
 
 # modes go from -M to M

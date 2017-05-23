@@ -1,9 +1,9 @@
 using DoubleFourierSphere
 
-M = 32
-N = 16
+X = 32
+Y = 16
 
-Λ, Φ = spheregrids(M,N)
+Λ, Φ = spheregrids(X,Y)
 
 # STUB
 # Only test I can think of is conservation of ζ

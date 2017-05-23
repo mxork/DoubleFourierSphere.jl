@@ -16,7 +16,7 @@ for M in 0:3
         Ni = M == 0 ? N+1 : N
 
         U = fouriermode(M,N)(Gl, Gp)
-        Uf = fftsphere(U)
+        Uf = fft_sphere(U)
 
         # most of the energy should be here
         # note the conjugate could also show up

@@ -1,10 +1,7 @@
-export laplace_sphere, laplace_sphere_inv, laplace_sphere_inv_spectral
-export plan_laplace_inv!
-
-#TODO clean up the interfaces after screwing with FFT code, esp. dimension
+export laplace, laplace_inv, plan_laplace_inv!
 
 # computes the laplacian of U over a sphere
-function laplace_sphere(U)
+function laplace(U)
     Uf = fftsphere(U)
     Gf = zeros(Uf)
 
@@ -32,16 +29,67 @@ function laplace_sphere(U)
     ifftsphere(Gf)
 end
 
-# solve ΔU = G
-function laplace_sphere_inv(G)
+function laplace_inv(G)
     Gf = fftsphere(G)
 
-    Uf = laplace_sphere_inv_spectral(Gf)
+    Uf = laplace_inv_spectral(Gf)
 
     ifftsphere(Uf)
 end
 
-function laplace_sphere_inv_spectral(Gf)
+# these need reworking - all the DA functions
+# throw a lot of garbage
+# ugly as hell
+
+function plan_laplace_inv!(Gf)
+    M, Ms = zonal_modes(Gf)
+    N, Ns0, Ns = meridional_modes(Gf)
+
+    # precompute all the matrices; uses
+    # a lot of space, but we're going to be using them
+    # often
+
+    # gonna be backsolving D, so LU it
+    Ds = Array{ SparseArrays.UMFPACK.UmfpackLU, 1 }( size(Ms) )
+    As = Array{ SparseMatrixCSC{Float64, Int64}, 1 }( size(Ms) )
+
+    D = Array{Float64, 2}(N, N)
+    A = similar(D)
+
+    for mi in 1:size(Ms,1)
+        m = Ms[mi]
+
+        if m == 0
+            DAzero!(D, A)
+            D[1,1] = 1.0
+        elseif isodd(m)
+            DAodd!(D, A, m)
+        else
+            DAeven!(D, A, m)
+        end
+
+        # pretreat the matrices a little to make 'em faster
+        Ds[mi] = lufact(sparse(D))
+        As[mi] = sparse(A)
+    end
+
+    function (Uf, Gf)
+        # zero is a special case
+        # FIXME this back solve agrees, right? can't slice on an LU-sparse
+        Uf[1, :] = Ds[1] \ (As[1] * Gf[1, :] )
+        Uf[1,1] = 0
+
+        # everything else
+        for mi in 2:size(Ms,1)
+            D, A = Ds[mi], As[mi]
+            Uf[mi, :] = D \ (A * Gf[mi, :])
+        end
+
+        Uf
+    end
+end
+
+function laplace_inv_spectral(Gf)
     Uf = zeros(Gf) # same size, type
 
     M = convert(Int64, round(size(Gf,1)/2))
@@ -76,127 +124,18 @@ function laplace_sphere_inv_spectral(Gf)
     Uf
 end
 
-# these need reworking - all the DA functions
-# throw a lot of garbage
-# ugly as hell
-function plan_laplace_inv!(Gf)
-    M, Ms = zonal_modes(Gf)
-    N, Ns0, Ns = meridional_modes(Gf)
+# Linear systems corresponding to laplacian in frequency space. 
+# Infers the size of the target vector from input arguments, writes result to
+# arguments.
 
-    # precompute all the matrices; uses
-    # a lot of space, but we're going to be using them
-    # often
-
-    # gonna be backsolving D, so LU it
-    Ds = Array{ SparseArrays.UMFPACK.UmfpackLU, 1 }( size(Ms) )
-    As = Array{ SparseMatrixCSC{Float64, Int64}, 1 }( size(Ms) )
-
-    D = Array{Float64, 2}(N, N)
-    A = similar(D)
-
-    for mi in 1:size(Ms,1)
-        m = Ms[mi]
-
-        if m == 0
-            DAzero!(D, A)
-            D[1,1] = 1.0
-        elseif isodd(m)
-            DAodd!(D, A, m)
-        else
-            DAeven!(D, A, m)
-        end
-
-        Ds[mi] = lufact(sparse(D))
-        As[mi] = sparse(A)
-    end
-
-    function (Uf, Gf)
-        # zero is a special case
-        Uf[1, :] = Ds[1] \ (As[1] * Gf[1, :] )
-        Uf[1,1] = 0
-
-        for mi in 2:size(Ms,1)
-            D, A = Ds[mi], As[mi]
-            Uf[mi, :] = D \ (A * Gf[mi, :])
-        end
-
-        Uf
-    end
-end
-
-# each of these has two forms, one of which accepts a result buffer
 # TODO consider using a sparse matrix set up. just call sparse(A), sparse(D)
-function DAodd(dims, M)
-    D, A = zeros(dims), zeros(dims)
-    DAodd!(D, A, M)
+# TODO consider factoring these into true tridiagonals, of halfsize (would have)
+# to hack the stride of the matrices to get the right entries w/o a copy.
 
-    D, A
-end
-
-function DAodd!(D, A, M)
-    @assert isodd(M)
-    @assert size(D) == size(A)
-
-    # apparently, inner loop should be first in Julia
-    # @inbounds
-    for j in 1:size(D,2), i in 1:size(D,1)
-        D[i,j] =
-            i==j   ? -(i^2 + 2*M^2)/2 :
-            j==i-2 ? (i-1)*(i-2)/4 :
-            j==i+2 ? (i+1)*(i+2)/4 :
-            0
-
-        A[i,j] =
-            i==j   ? 1/2 :
-            j==i-2 ? -1/4 :
-            j==i+2 ? -1/4 :
-            0
-    end
-
-    A[1,1] = 3/4;
-end
-
-function DAeven(dims, M)
-    D, A = zeros(dims), zeros(dims)
-    DAeven!(D, A, M)
-
-    D, A
-end
-
-function DAeven!(D, A, M)
-    @assert iseven(M)
-    @assert size(D) == size(A)
-
-    # @inbounds
-    for j in 1:size(D,2), i in 1:size(D,1)
-        D[i,j] =
-            i==j   ? -(i^2 + 2*M^2)/2 :
-            j==i-2 ? i*(i-1)/4 :
-            j==i+2 ? i*(i+1)/4 :
-            0
-
-        A[i,j] =
-            i==j   ? 1/2 :
-            j==i-2 ? -1/4 :
-            j==i+2 ? -1/4 :
-            0
-    end
-
-    A[1,1] = 3/4;
-end
-
-function DAzero(dims)
-    D, A = zeros(dims), zeros(dims)
-    DAzero!(D, A)
-    D, A
-end
-
-# These are giving me trouble. I need to sit down and do algebra.
 function DAzero!(D, A)
     M = 0 # by definition
     @assert size(D) == size(A)
 
-    # @inbounds
     # some bounds trickery cuz offset here
     for ji in 1:size(D,2), ii in 1:size(D,1)
         i, j = ii-1, ji-1
@@ -225,3 +164,49 @@ function DAzero!(D, A)
     A[1,3] = -1/4
     D[1,3] = 1/2
 end
+
+function DAodd!(D, A, M)
+    @assert isodd(M)
+    @assert size(D) == size(A)
+
+    # apparently, inner loop should be first in Julia
+    # @inbounds
+    for j in 1:size(D,2), i in 1:size(D,1)
+        D[i,j] =
+            i==j   ? -(i^2 + 2*M^2)/2 :
+            j==i-2 ? (i-1)*(i-2)/4 :
+            j==i+2 ? (i+1)*(i+2)/4 :
+            0
+
+        A[i,j] =
+            i==j   ? 1/2 :
+            j==i-2 ? -1/4 :
+            j==i+2 ? -1/4 :
+            0
+    end
+
+    A[1,1] = 3/4;
+end
+
+function DAeven!(D, A, M)
+    @assert iseven(M)
+    @assert size(D) == size(A)
+
+    # @inbounds
+    for j in 1:size(D,2), i in 1:size(D,1)
+        D[i,j] =
+            i==j   ? -(i^2 + 2*M^2)/2 :
+            j==i-2 ? i*(i-1)/4 :
+            j==i+2 ? i*(i+1)/4 :
+            0
+
+        A[i,j] =
+            i==j   ? 1/2 :
+            j==i-2 ? -1/4 :
+            j==i+2 ? -1/4 :
+            0
+    end
+
+    A[1,1] = 3/4;
+end
+

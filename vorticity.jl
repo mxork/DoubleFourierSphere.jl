@@ -1,15 +1,15 @@
-using DoubleFourierSphere
+export dζ, plan_dζf!, courant_number
 
-# time step. Assume constant coriolis (F)
-# forward euler, baby
-function timestep(Z0, F, Δt, n_steps)
-    for i in 1:n_steps
-        Z0 += real(dζ(Z0, F)*Δt)
-    end
+# goal: solve vorticity on sphere using fts as above
 
-    Z0
+# Z = vorticity grid
+# F = coriolis forcing
+function dζ(Z, F)
+    # TODO splice back in the naive version from old git
 end
 
+# plans a computation of the instantenous dζ_{m,n}/dt given a
+# matrix shaped like Zf
 function plan_dζf!(Zf)
     # ALLOCATION
     M, Ms = zonal_modes(Zf)
@@ -36,8 +36,7 @@ function plan_dζf!(Zf)
 
     lat_trunc_mask = latitude_truncation_mask(Zf) 
 
-    # throw in a computation for the CFL number
-    # somewhere in here TODO
+    # throw in a computation for the CFL number somewhere in here TODO
     function (dζf, Zf, Ff)
         Hf[:] = Zf + Ff
         laplace_inv_into!(Ψf, Zf)
@@ -56,49 +55,7 @@ function plan_dζf!(Zf)
     end
 end
 
-# goal: solve vorticity on sphere using fts as above
-
-# Z = vorticity grid
-# F = coriolis forcing
-function dζ(Z, F)
-
-    # MEAT
-    Zf = fftsphere(Z)
-    Ff = fftsphere(F) # Terrible notation, but consistent
-    Hf = Zf + Ff
-    Ψf = laplace_sphere_inv_spectral(Zf)
-
-    # calculate spectral coefficients for
-    # U, V and η derivatives
-
-    # U,V
-    A_mul_B!(Vf, Mscale, Ψf)
-    Vf[:,:] *= 1.0im
-
-    sinφdφ_into!(Uf, Ψf)
-
-    # η
-    A_mul_B!(Hλf, Mscale, Hf)
-    Hλf[:,:] *= 1.0im
-
-    sinφdφ_into!(Hφf, Hf)
-    Hφf *= -1.0 # conventional -ve
-
-
-    # now we have the derived quantites, pop back
-    # into normal space and do the PW multiplication
-    XY_into!(Xf, Yf, Uf, Vf, Hλf, Hφf)
-
-    dζf[:,:] = -Xf -Yf
-
-    # filter out the higher frequencies near the poles
-    # §3.2
-    dζf .*= lat_trunc_mask
-
-    # and here is dζ/dt (spectral, actually)
-    ifftsphere(-Xf - Yf)
-end
-
+# plans an application of the -sinφdφ to a matrix shaped like Ψf
 function plan_sinφdφ!(Ψf)
     M, Ms = zonal_modes(Ψf)
 
@@ -154,8 +111,6 @@ end
 # returns the matrix corresponding to the sinφdφ
 # operator in frequency space
 # actually, the -ve sinφdφ operator
-# TODO truncate Nth mode entirely since out of range?
-# ANSWER Yes, and the N=0 mode is 0, so don't worry about it
 function sinφdφ(N)
     return [ j==i+1 ?  (i+1)/2:
              j==i-1 && i!=N ? -(i-1)/2:
@@ -170,7 +125,8 @@ function sinφdφ_even_not_zero(N)
              for i in 1:N, j in 1:N]
 end
 
-
+# Binary matrix (1s and 0s) corresponding to a truncation of high zonal
+# frequencies near poles. The exact point of truncation is up for massage.
 function latitude_truncation_mask(A)
     M, Ms = zonal_modes(A)
     Φs = latitude_interior_grid(A)
@@ -178,4 +134,9 @@ function latitude_truncation_mask(A)
 
     return [ abs(m) > upper_limit(φ)? 0 : 1
              for m in Ms, φ in Φs]
+end
+
+# determines the maximum time step size allowable given a vorticity field
+# ζ, and a grid reduction paramter to be determined TODO
+function courant_number()
 end

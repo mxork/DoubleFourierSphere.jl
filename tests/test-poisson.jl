@@ -1,9 +1,9 @@
 using DoubleFourierSphere
 
-M = 64
-N = 32
+X = 64
+Y = 32
 
-Λ, Φ = spheregrids(M,N)
+Λ, Φ = spheregrids(X,Y)
 
 # for a variety of modes, check inversion property of 
 # laplace - inverse laplace
