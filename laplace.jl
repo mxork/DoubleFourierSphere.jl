@@ -30,11 +30,17 @@ function laplace(U)
 end
 
 function laplace_inv(G)
-    Gf = fftsphere(G)
+    Gf = fft_sphere(G)
 
     Uf = laplace_inv_spectral(Gf)
 
-    ifftsphere(Uf)
+    ifft_sphere(Uf)
+end
+
+# like laplace_inv but from spectral to spectral
+function laplace_inv_spectral(Gf)
+    Uf = similar(Gf)
+    (plan_laplace_inv!(Gf))(Uf, Gf)
 end
 
 # these need reworking - all the DA functions
@@ -89,40 +95,6 @@ function plan_laplace_inv!(Gf)
     end
 end
 
-function laplace_inv_spectral(Gf)
-    Uf = zeros(Gf) # same size, type
-
-    M = convert(Int64, round(size(Gf,1)/2))
-    Ms = [0:M-1 ; -M:-1]
-
-    # setup differentiation matrices
-    # m=0
-    J = size(Gf,2)
-    D, A = DAzero( (J,J) )
-
-    # some hands on surgery to fix constant term.
-    # TODO this constant term is trickier than expected,
-    # since m0, neven modes have a non-zero (0,0) component
-    # god, I hope this gets compiles into something better
-    Uf[1, 2:end] = D[:, 2:end] \ A * Gf[1, :] 
-    Uf[1,1] = 0
-
-    # m odd
-    for mi in 2:2:size(Gf,1)
-        m = Ms[mi]
-        DAodd!(D, A, m)
-        Uf[mi, :] = D \ A * Gf[mi, :]
-    end
-
-    # m even
-    for mi in 3:2:size(Gf,1)
-        m = Ms[mi]
-        DAeven!(D, A, m)
-        Uf[mi, :] = D \ A * Gf[mi, :]
-    end
-
-    Uf
-end
 
 # Linear systems corresponding to laplacian in frequency space. 
 # Infers the size of the target vector from input arguments, writes result to
