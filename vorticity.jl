@@ -44,9 +44,13 @@ function dζ(Z, F)
                     A * Hf[mi,:]
     end
 
+    # note that the partial derivatives have mangled
+    # even modes (since )
+
     # now we have the derived quantites, pop back
     # into normal space and do the PW multiplication
     # these can be FASTER
+    # gotta put those sinφ in FIXME
     U, V = ifft_sphere(Uf), ifft_sphere(Vf)
     Hλ, Hφ = ifft_sphere(Hλf), ifft_sphere(Hφf)
 
@@ -58,8 +62,10 @@ function dζ(Z, F)
 
     Xf, Yf = fft_sphere(X), fft_sphere(Y)
 
-    # and here is dζ/dt (spectral, actually)
-    ifft_sphere(-Xf - Yf)
+    Zm = fft_latitude_inv(-Xf -Yf)
+    Zm .*= latitude_truncation_mask(Zm)
+
+    ifft(Zm, 1)
 end
 
 # plans a computation of the instantenous dζ_{m,n}/dt given a
@@ -115,7 +121,11 @@ function plan_dζf!(Zf)
         @assert maximum(abs(Yf)) < 1e10 
 
         dζf[:] = -Xf -Yf
-        dζf .*= lat_trunc_mask
+
+        # FIXME
+        tmp = fft_latitude_inv(dζf)
+        tmp .*= lat_trunc_mask 
+        dζf[:] = fft_latitude(tmp)
     end
 end
 
@@ -172,6 +182,44 @@ function plan_calculate_XY!(Uf, F!, Fi!)
     end
 end
 
+function gradient(G)
+    Gf = fft_sphere(G)
+
+    # apply sinφ grad in space and undo sinφ afties
+    Gλf, Gφf = similar(Gf), similar(Gf)
+
+    M, Ms = zonal_modes(Gf)
+    Gλf[:] = 1.0im * diagm(Ms) * Gf
+    (plan_sinφdφ!(Gf))(Gφf, Gf)
+    Gφf *= -1.0
+
+    Gλm = fft_latitude_inv(Gλf)
+    Gλm .*= latitude_truncation_mask(Gλm)
+    Gλ = ifft(Gλm, 1)
+
+    Gφm = fft_latitude_inv(Gφf)
+    Gφm .*= latitude_truncation_mask(Gφm)
+    Gφ = ifft(Gφm, 1)
+
+    # now account for sinφ
+    Φ = latitude_interior_grid(G)
+    pole_scale = 1 ./ sin(Φ)
+
+    # for λi in 1:size(Gλ, 1)
+    #     Gλ[λi, :] .*= pole_scale
+    # end
+
+    Gx = Gλ
+
+    # for λi in 1:size(Gφ, 1)
+    #     Gφ[λi, :] .*= pole_scale
+    # end
+
+    Gy = Gφ
+
+    Gx, Gy
+end
+
 # returns the matrix corresponding to the sinφdφ
 # operator in frequency space
 # actually, the -ve sinφdφ operator
@@ -196,7 +244,7 @@ function latitude_truncation_mask(A)
     Φs = latitude_interior_grid(A)
     upper_limit = (φ) -> min(M, 6+(M-6)*sin(φ))
 
-    return [ abs(m) > upper_limit(φ)? 0 : 1
+    return [ abs(m) > upper_limit(φ) ? 0 : 1
              for m in Ms, φ in Φs]
 end
 

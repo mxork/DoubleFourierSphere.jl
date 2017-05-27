@@ -64,32 +64,26 @@ function ift_sphere(Uf)
 
     # cheong basis
 
-    # m zero
-    m = 0
-    mi = m+1
-    for φi in 1:Nφ
-        φ = Φs[φi]
-        Um[mi, φi] = sum( Uf[mi, :] .* cos( Ns0 * φ ) )
-    end
+    M, Ms = zonal_modes(Uf)
 
-    # m odd
-    for m in 1:2:Nλ-1
-        mi = m+1
+    # literally the worst way of grouping this
+    for mi in 1:size(Uf,1)
+        m = Ms[mi]
         for φi in 1:Nφ
             φ = Φs[φi]
-            Um[mi, φi] = sum( Uf[mi, :] .* sin( Ns * φ ) )
-        end
-    end
 
-    # m even
-    for m in 2:2:Nλ-1
-        mi = m+1
-        for φi in 1:Nφ
-            φ = Φs[φi]
-            Um[mi, φi] = sum( Uf[mi, :] .* sin( Ns * φ ) )
+            if m == 0
+                Um[mi, φi] = sum( Uf[mi, :] .* cos( Ns0 * φ ) )
+            elseif  isodd(m)
+                Um[mi, φi] = sum( Uf[mi, :] .* sin( Ns * φ ) )
+            else
+                Um[mi, φi] = sum( Uf[mi, :] .* sin( Ns * φ ) )
+            end
         end
 
-        Um[mi, :] = Um[mi, :] .* sin(Φs) # undo the transform
+        if iseven(m) && m != 0
+            Um[mi, :] .*= sin(Φs) # undo the CoV
+        end
     end
 
     # ifft meriodonal
@@ -173,6 +167,97 @@ function plan_ifft_sphere!(Uf)
     function (U, Uf)
         U[:] = ift_sphere(Uf) 
     end
+end
+
+# just do the latitude transform
+function fft_latitude(Um)
+    # full transform output
+    Nλ, Nφ = size(Um)
+    Uf = zeros(Complex128, Nλ, Nφ)
+
+    # interior grid for latitude
+    Φs = Complex128[ π*(j+0.5)/Nφ for j in 0:Nφ-1]
+    basis = zeros(Complex128, Nφ)
+
+    # m zero
+    m = 0
+    mi = m +1
+    for n in 0:Nφ-1
+        ni = n+1
+        basis = cos(n*Φs)
+        b = (n == 0 ? 1 : 2)
+
+        Uf[mi,ni] = b * sum(Um[mi, :] .* basis) / Nφ
+    end
+
+    # m odd
+    for m in 1:2:Nλ-1
+        mi = m+1
+        for n in 1:Nφ
+            ni = n # no offset, since n=0 is trivial
+            basis = sin(n*Φs)
+            c = (n == Nφ ? 1 : 2)
+
+            Uf[mi,ni] = c* sum(Um[mi, :] .* basis) / Nφ
+        end
+    end
+
+    # m even
+    for m in 2:2:Nλ-1
+        mi = m+1
+
+        for n in 1:Nφ
+            ni = n
+            basis = sin(n*Φs)
+            c = (n == Nφ ? 1 : 2)
+
+            Uf[mi,ni] = c* sum( (Um[mi, :] ./ sin(Φs)) .* basis) / Nφ
+        end
+    end
+
+    Uf
+end
+
+# just undo the latitude transform
+function fft_latitude_inv(Uf)
+    Nλ, Nφ = size(Uf)
+    Um = zeros(Uf)
+
+    Ns = 1:Nφ
+    Ns0 = 0:(Nφ-1)
+    Φs = Complex128[ π*(j+0.5)/Nφ for j in 0:Nφ-1]
+
+    # cheong basis
+
+    # m zero
+    m = 0
+    mi = m+1
+    for φi in 1:Nφ
+        φ = Φs[φi]
+        Um[mi, φi] = sum( Uf[mi, :] .* cos( Ns0 * φ ) )
+    end
+
+    # m odd
+    for m in 1:2:Nλ-1
+        mi = m+1
+        for φi in 1:Nφ
+            φ = Φs[φi]
+            Um[mi, φi] = sum( Uf[mi, :] .* sin( Ns * φ ) )
+        end
+    end
+
+    # m even
+    for m in 2:2:Nλ-1
+        mi = m+1
+        for φi in 1:Nφ
+            φ = Φs[φi]
+            Um[mi, φi] = sum( Uf[mi, :] .* sin( Ns * φ ) )
+        end
+
+        Um[mi, :] = Um[mi, :] .* sin(Φs) # undo the transform
+    end
+
+    Um
 end
 
 # FIXME we have weird behaviour still on the m even modes

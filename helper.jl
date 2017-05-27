@@ -55,16 +55,18 @@ import Plots
 
 # plots the 2D matrix G on our canonical sphere
 function plot_sphere(G, title::String = "")
-    Plots.heatmap(longitude_grid(G), latitude_interior_grid(G), G, title=title)
+    # Plots.heatmap(longitude_grid(G), latitude_interior_grid(G), G, title=title)
+    Plots.heatmap(G, title=title)
 end
 
 # ditto, but in frequency space, so no contour
 # TODO make something prettier
 function plot_frequency(Gf, title::String = "")
-    M, Ms = zonal_modes(Gf)
-    N, Ns0, Ns = meridional_modes(Gf)
+    # M, Ms = zonal_modes(Gf)
+    # N, Ns0, Ns = meridional_modes(Gf)
 
-    Plots.heatmap(Ms, Ns, Gf, title=title)
+    # Plots.heatmap(Ms, Ns, Gf, title=title)
+    Plots.heatmap(Gf, title=title)
 end
 
 # returns maximal wavenumber and iterable of
