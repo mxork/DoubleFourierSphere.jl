@@ -7,4 +7,5 @@
 !*.pdf
 !*.md
 !*.jl
+!*.org
 output-images/

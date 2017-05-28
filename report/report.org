@@ -1,0 +1,206 @@
+#+STARTUP: showstars
+#+STARTUP: latexpreview 
+
+#+title: Fourier series on the sphere
+
+* Introduction 
+
+** Overview
+
+This paper is entirely an implementation of a scheme published by Cheong[^] in ~Julia~ [^].
+We'll re-derive some results in more detail, and prove others which the original author
+omitted. The aim is to display a fluency in the methods used, and make something useful.
+
+** Notation
+
+We adopt some notational conventions which we will use throughout the paper, and which
+match that used in the code. 
+
+Throughout, we assume our sphere has radius one.
+
+| math symbol      | description                                                                                |
+|------------------+--------------------------------------------------------------------------------------------|
+| $u$, $g$, $\eta$ | Functions (generally real-valued) defined on the unit sphere.                              |
+| $u_{m,n}$        | The spectral coefficient of $u$, with zonal wavenumber $m$, and meridional wavenumber $n$. |
+| $\lambda$        | Longitude, taken over $[0, 2\pi)$.                                                         |
+| $\phi$           | Latitude, taken over $(0,\pi)$.                                                            |
+
+| code symbol | description                                                                                                                      |
+|-------------+----------------------------------------------------------------------------------------------------------------------------------|
+| ~U, G, H~     | Function values (generally real) taken on a $(\lambda, \phi)$ uniform grid.                                                      |
+| ~Uf, Gf, Hf~  | Spectral coefficient matrices, complex.                                                                                          |
+| ~Hλ, Hφ~      | Partial derivatives.                                                                                                             |
+| ~Λs, Φs~      | Coordinate vectors. Longitudinal values are uniformly spaced starting at 0, latitude uniformly spaced but offset by a half-step. |
+
+
+** Pictures 
+
+*** reflection
+*** figure 8
+
+
+* The transform
+** math
+
+Our transform uses the basis functions of Cheong:
+
+\begin{equation*}
+b_{m,n} = \exp{im\lambda}
+  \begin{cases}
+  \cos{n\phi}  &  m=0 \\
+  \sin{n\phi}   &  m \text{ is odd} \\
+  \sin{\phi}\sin{n\phi} & m \text{ is even, } > 0 
+  \end{cases}
+\end{equation*}
+
+Which satisfy the pole conditions. We take a discretization of the sphere
+surface which avoids points directly at the poles (ie. $\sin{\phi} = 0$), so we
+can use the FFT sine transform on the substituted variable $g' = \frac{}{}$, and
+avoid division by zero.
+
+** code
+
+We implement four main functions for the transform:
+
+- ~fft_sphere(  )~ 
+- ~ifft_sphere(  )~
+- ~plan_fft_sphere!(  )~
+- ~plan_ifft_sphere!(  )~
+
+Which are analogous to the ones found in any FFT package. The first two are
+convenient, and return a new matrix of the transform coefficients. The ~plan_*~
+functions are for speed; they each return a function which takes two arguments,
+~A~ and ~B~, computes the transform of ~A~, and writes the result to ~B~. All working
+memory is preallocated, and operators precomputed, so we avoid thrashing the
+garbage collector and performing redundant operations.
+
+#+begin_src julia 
+#+end_src
+
+** demos and tests
+
+We test the forward transform by running them on specific basis functions,
+and checking the correct coeffficients are non-zero:
+
+#+begin_src julia 
+# demos/demo-fft.jl
+using DoubleFourierSphere
+
+M = 4
+N = 3
+
+Gλ, Gφ = spheregrids(64,32)
+U = fouriermode(M,N)(Gλ, Gφ)
+Uf = fft_sphere(U)
+
+# display
+
+import Plots
+Plots.gr(size=(1200,400))
+
+Plots.plot( plot_sphere(real(U)), plot_frequency(abs(Uf)) )
+
+Plots.savefig("output-images/output.png")
+#+end_src
+
+*** TODO caption
+ #+CAPTION: 
+ [[demos/output-images/demo-fft.png]]
+
+*** TODO random functions and transforms
+ We test the inverse transform by checking idempotency of it's composition with
+ the forward transport: $\text{} $:
+
+[[demos/output-images/demo-ifft.png]]
+
+ We're good to within machine epsilon.
+   
+
+* Poisson's equation
+
+** the scheme
+
+The structural similarity of the Cheong basis and the spherical harmonics gives
+us good reason to hope that the Laplacian will have a simple structure in
+frequency space. We will lay out the trigonometry in some detail, and obtain a
+tridiagonal system of linear equations for the spectral coefficients of $g$,
+given $\triangle u = g$. Solving the Poisson equation is just a matter of
+backsolving these linear equations.
+
+** math
+
+*** derivation of tridiagonal
+
+
+** code
+
+We implement two convenience functions, and a lower-level which we will use for
+performance reasons in the next section.
+
+- ~laplace~
+- ~laplace_inv~
+- ~plan_laplace_inv!~
+
+** demos
+
+We verify the behaviour of the forward Laplcian by testing it on a non-constant spherical
+harmonic and verifying the eigenfunction property:
+
+#+begin_src: julia
+#+end_src 
+
+[[demos/output-images/demo-laplace.png]]
+
+Similar to the case for ~ifft_sphere~, we verify the performance of the inverse Laplcian 
+by confirming that it's composition with the forward Laplacian is identity (up to a constant
+factor):
+
+#+begin_src: julia
+#+end_src
+
+[[demos/output-images/demo-laplace_inv.png]]
+
+* Vorticity, 2D inviscid
+
+** the scheme
+
+We consider baby case of the vorticity equation; we assume non-divergent and inviscid flow (though,
+allowing viscosity would not be difficult, and would improve stability somewhat). The equation is:
+
+\begin{equation}
+\zeta_t = - \frac{}{}\eta_\lambda - \frac{}{}\eta_\phi
+\end{equation}
+
+Where $\zeta$ is relative vorticity, $\eta$ is absolute vorticity, and subscripts denote partial
+derivatives. $U$ and $V$ are defined as follows:
+
+**** TODO 
+  \begin{equation}
+  \zeta_t = - \frac{}{}\eta_\lambda - \frac{}{}\eta_\phi
+  \end{equation}
+
+We begin by applying our Poisson solver to $\zeta$ to obtain $\psi$, the stream function. We derive
+the linear systems corresponding to $\partial_\lambda$ and $\sin{\phi}\partial_\phi$, and using them
+compute $U$, $V$ from the stream function, and the partial derivatives of $\eta$. We return to 
+normal space to compute the pointwise products. We are done.  
+
+Not fully, though. Since we are (finally) integrating in time, we have to address stability. We 
+lean on the CFL condition to derive an expression for the maximal timestep allowed, and
+spitball a little on this, the interesting part of this paper.
+
+** math
+*** derivation of tridiagonal
+*** stability
+
+**** CFL condition and grid reduction
+**** Spherical harmonic filter
+***** linearization?
+
+** code
+
+- ~vorticity_run~
+- ~plan_dζf!~
+- ~~
+ 
+** demos
+     
