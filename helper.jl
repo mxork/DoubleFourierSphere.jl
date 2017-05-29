@@ -1,4 +1,4 @@
-export legendre, spheregrids, sphericalmode, fouriermode, plot_sphere, plot_frequency
+export legendre, spheregrids, sphericalmode, sphericalmode_complex, fouriermode, plot_sphere, plot_frequency
 export zonal_modes, meridional_modes, latitude_interior_grid
 
 # associated legendre polynomial 
@@ -35,6 +35,10 @@ end
 # n = θ wavenumber, latitude
 function sphericalmode(m,n)
     return (λ, θ) -> legendre(m,n,cos(θ)) .* cos(m*λ)
+end
+
+function sphericalmode_complex(m,n)
+    return (λ, θ) -> legendre(m,n,cos(θ)) .* exp(1.0im*m*λ)
 end
 
 # returns the n-m fourier mode on the sphere,
@@ -93,4 +97,8 @@ function latitude_interior_grid(A)
     N = size(A, 2)
     # Φs = [ π*(j+0.5)/N for j in 0:N-1]
     Φs = 0.5*π/N:π/N:π*(1-0.5*1/N)
+end
+
+function average_sphere_spectral(Gf)
+    sum( Gf[1, 1:2:end] .* (1 - ((0:2:size(Gf,2)-1).^2))) / size(Gf, 1) # cause we didn't normalize the longitude fft
 end

@@ -126,6 +126,7 @@ function plan_ifft_latitude!(Uf::Array{Complex128, 2})
     v = [ 0.0 ; Uf[1, :]... ; conj(Uf[1, end:-1:2])... ]
     w = similar(v)
     u = view(w, 1:Nφ) # this is an undoubled view into w
+    u2 = view(w, Nφ+1:2*Nφ)
 
     # INPLACE
     Fsi = plan_ifft(v)
@@ -144,6 +145,7 @@ function plan_ifft_latitude!(Uf::Array{Complex128, 2})
             m = Ms[mi]
 
             u[:] = Uf[mi,:]
+            u2[:] = Uf[mi,:]
             u[:] .*= interior_grid_unshift
             v[:] = [ 0.0 ; u[1:end] ; conj(u[end-1:-1:1]) ]
 
@@ -299,4 +301,75 @@ function ift_sphere(Uf)
 
     # ifft meriodonal
     U = ifft(Um, 1)
+end
+
+function plan_ift_latitude!(Uf)
+    Nλ, Nφ = size(Uf)
+    Ns = 1:Nφ
+    Ns0 = 0:(Nφ-1)
+    Φs = latitude_interior_grid(Uf)
+    pole_scale = sin(Φs)
+    M, Ms = zonal_modes(Uf)
+
+    C = [ cos(Ns0 * φ) for φ in Φs]
+    S = [ sin(Ns * φ) for φ in Φs]
+
+    function (Um, Uf)
+        for mi in 1:size(Uf,1)
+            m = Ms[mi]
+
+            for φi in 1:Nφ
+                φ = Φs[φi]
+
+                if m == 0
+                    Um[mi, φi] = sum( Uf[mi, :] .* C[φi] )
+                elseif  isodd(m)
+                    Um[mi, φi] = sum( Uf[mi, :] .* S[φi] )
+                else
+                    Um[mi, φi] = sum( Uf[mi, :] .* S[φi] )
+                end
+            end
+
+            if iseven(m) && m != 0
+                Um[mi, :] .*= sin(Φs) # undo the CoV
+            end
+        end
+
+        Um ./= Nφ
+    end
+end
+
+function ift_latitude!(Um, Uf)
+    Nλ, Nφ = size(Uf)
+
+    Ns = 1:Nφ
+    Ns0 = 0:(Nφ-1)
+    Φs = Complex128[ π*(j+0.5)/Nφ for j in 0:Nφ-1]
+
+    # cheong basis
+
+    M, Ms = zonal_modes(Uf)
+
+    # literally the worst way of grouping this
+    for mi in 1:size(Uf,1)
+        m = Ms[mi]
+
+        for φi in 1:Nφ
+            φ = Φs[φi]
+
+            if m == 0
+                Um[mi, φi] = sum( Uf[mi, :] .* cos( Ns0 * φ ) )
+            elseif  isodd(m)
+                Um[mi, φi] = sum( Uf[mi, :] .* sin( Ns * φ ) )
+            else
+                Um[mi, φi] = sum( Uf[mi, :] .* sin( Ns * φ ) )
+            end
+        end
+
+        if iseven(m) && m != 0
+            Um[mi, :] .*= sin(Φs) # undo the CoV
+        end
+    end
+
+    Um ./= Nφ
 end
