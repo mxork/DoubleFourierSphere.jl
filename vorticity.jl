@@ -182,6 +182,17 @@ function plan_calculate_XY!(Uf, F!, Fi!)
     end
 end
 
+function plan_gradient!(G)
+    F = plan_fft_sphere!(G)
+    Fi = plan_ifft_sphere!(G)
+    M, Ms = zonal_modes(G)
+    Mscale = 
+
+    function (Gx, Gy, G)
+
+    end
+end
+
 function gradient(G)
     Gf = fft_sphere(G)
 
@@ -205,15 +216,15 @@ function gradient(G)
     Φ = latitude_interior_grid(G)
     pole_scale = 1 ./ sin(Φ)
 
-    # for λi in 1:size(Gλ, 1)
-    #     Gλ[λi, :] .*= pole_scale
-    # end
+    for λi in 1:size(Gλ, 1)
+        Gλ[λi, :] .*= pole_scale
+    end
 
     Gx = Gλ
 
-    # for λi in 1:size(Gφ, 1)
-    #     Gφ[λi, :] .*= pole_scale
-    # end
+    for λi in 1:size(Gφ, 1)
+        Gφ[λi, :] .*= pole_scale
+    end
 
     Gy = Gφ
 
@@ -246,6 +257,10 @@ function latitude_truncation_mask(A)
 
     return [ abs(m) > upper_limit(φ) ? 0 : 1
              for m in Ms, φ in Φs]
+end
+
+function average_sphere_spectral(Gf)
+    sum( Gf[1, 1:2:end] .* (1 - ((0:2:size(Gf,2)-1).^2))) / size(Gf, 1) # cause we didn't normalize the longitude fft
 end
 
 # determines the maximum time step size allowable given a vorticity field
