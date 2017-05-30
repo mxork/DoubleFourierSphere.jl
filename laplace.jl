@@ -2,31 +2,31 @@ export laplace, laplace_inv, plan_laplace_inv!
 
 # computes the laplacian of U over a sphere
 function laplace(U)
-    Uf = fftsphere(U)
+    Uf = fft_sphere(U)
     Gf = zeros(Uf)
 
+    D = zeros( size(U,2), size(U,2))
+    A = zeros( size(U,2), size(U,2))
+
     # m zero
-    D, A = DAzero( size(Uf) )
-    Gf[1, :] = A \ D * Uf[1, :] 
+    DAzero!(D, A)
+    # Gf[1, :] = A \ (D * Uf[1, :] )
+    Gf[1, :] = (D * Uf[1, :] )
 
-    M = convert(Int64, round(size(Gf,1)/2))
-    Ms = [0:M-1 ; -M:-1]
+    M, Ms = zonal_modes(Gf)
 
-    # m odd
-    for mi in 2:2:size(Gf,1)
+    for mi in 1:size(Gf,1)
         m = Ms[mi]
-        DAodd!(D, A, m)
-        Gf[mi, :] = A \ D * Uf[mi, :]
+        if isodd(m)
+          DAodd!(D, A, m)
+        else
+          DAeven!(D, A, m)
+        end
+        # Gf[mi, :] = A \ (D * Uf[mi, :])
+        Gf[mi, :] =  (D * Uf[mi, :])
     end
 
-    # m even
-    for mi in 3:2:size(Gf,1)
-        m = Ms[mi]
-        DAeven!(D, A, m)
-        Gf[mi, :] = A \ D * Uf[mi, :]
-    end
-
-    ifftsphere(Gf)
+    ifft_sphere(Gf)
 end
 
 function laplace_inv(G)

@@ -169,3 +169,15 @@ function latitude_truncation_mask(A)
     return [ abs(m) > upper_limit(φ) ? 0 : 1
              for m in Ms, φ in Φs]
 end
+
+function iter_step(Gnxt, G, Vx, Vy, Gx, Gy, GRAD)
+    Gnxt[:] = G[:]
+    GRAD(Gx, Gy, G)
+
+    while norm(Gnxt - G - (Vx.*Gx + Vy.*Gy)) > 1e-10
+        Gnxt[:] = G + (Vx.*Gx + Vy.*Gy)
+        GRAD(Gx, Gy, Gnxt)
+    end
+
+    G[:] = Gnxt[:]
+end

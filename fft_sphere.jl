@@ -5,6 +5,18 @@ function fft_sphere(U)
     Uf = similar(U)
     Fs! = plan_fft_sphere!(U)
     Fs!(Uf, U)
+
+    # hack
+    M, Ms = zonal_modes(Uf)
+    N, Ns0, Ns = meridional_modes(Uf)
+
+    for ni in 1:size(Uf,2), mi in 1:size(Uf,1)
+        m, n = Ms[mi], mi==1 ? Ns0[ni] : Ns[ni]
+        if abs(m) >= div(M,2) || abs(n) >= div(N,2)
+            Uf[mi, ni] = 0
+        end
+    end
+    Uf
 end
 
 function ifft_sphere(Uf::Array{Complex128, 2})
@@ -164,7 +176,7 @@ function plan_ifft_latitude!(Uf::Array{Complex128, 2})
 end
 
 # just do the latitude transform
-function fft_latitude(Um)
+function ft_latitude(Um)
     # full transform output
     Nλ, Nφ = size(Um)
     Uf = zeros(Complex128, Nλ, Nφ)
