@@ -1,114 +1,46 @@
 function gradient(G)
     Gf = fft_sphere(G)
 
-    # apply sinφ grad in space and undo sinφ afties
-    Gλf, Gφf = similar(Gf), similar(Gf)
-
-    M, Ms = zonal_modes(Gf)
-    Gλf[:] = 1.0im * diagm(Ms) * Gf
-    (plan_sinφdφ!(Gf))(Gφf, Gf)
-
-    Gλm = similar(Gf)
-    ift_latitude!(Gλm,Gλf)
-    Gλm .*= latitude_truncation_mask(Gλm)
-    Gλ = ifft(Gλm, 1)
-
-    Gφm = similar(Gf)
-    ift_latitude!(Gφm,Gφf)
-    Gφm .*= latitude_truncation_mask(Gφm)
-    Gφ = ifft(Gφm, 1)
-
-    # now account for sinφ
-    Φ = latitude_interior_grid(G)
-    pole_scale = 1 ./ sin(Φ)
-
-    for λi in 1:size(Gλ, 1)
-        Gλ[λi, :] .*= pole_scale
-    end
-
-    Gx = Gλ
-
-    for λi in 1:size(Gφ, 1)
-        Gφ[λi, :] .*= pole_scale
-    end
-
-    Gy = Gφ
-
-    Gx, Gy
-end
-
-function plan_gradient!(G::Array{Complex128, 2})
-    Gf = similar(G)
-
     Gλf = similar(Gf)
     Gφf = similar(Gf)
 
-    Gλm = similar(Gf)
-    Gφm = similar(Gf)
+    (plan_sinφ_gradient_spectral!(Gf))(Gλf, Gφf, Gf)
 
-    F! = plan_fft_sphere!(G)
+    Gλ = ift_sphere(Gλf)
+    Gφ = ift_sphere(Gφf)
 
-    # Fiφ! = plan_ifft_latitude!(Gf)
-    Fiφ! = plan_ift_latitude!(Gf)
-    Fiλ! = plan_ifft_longitude!(Gf)
+    pole_scale = spdiagm(sin(latitude_interior_grid(Gf)))
 
-    M, Ms = zonal_modes(G)
-    Mscale = 1.0im * sparse(diagm(Ms))
+    Gλ *= pole_scale
+    Gφ *= pole_scale
 
-    N, Ns0, Ns = meridional_modes(G)
+    Gλ, Gφ
+end
 
-    Sφ! = plan_sinφdφ!(Gf)
+# still need to divide after this guy
+function plan_sinφ_gradient_spectral!(Uf::Array{Complex128, 2})
+    M, Ms = zonal_modes(Uf)
+    N, _ ,_ = meridional_modes(Uf)
 
-    lat_trunc_mask = latitude_truncation_mask(Gλm)
+    Dz = sinφdφ_zero!(spzeros(N, N))
+    Do = sinφdφ_odd!(spzeros(N, N))
+    De = sinφdφ_even!(spzeros(N, N))
 
-    pole_scale = 1 ./ sin( latitude_interior_grid(G))
+    Dλ = dλ(Uf)
 
-    function (Gx, Gy, G)
-        F!(Gf, G)
+    function (Uλf, Uφf, Uf)
+        Uλf[:] = Dλ * Uf
 
-        # try taking out a big chunk
-        for mi in 1:size(Gf,1)
+        for mi in 1:size(Uf, 1)
             m = Ms[mi]
-            if abs(m) > div(M,2)
-                Gf[mi, :] = 0
-            end
+            D = m==0     ? Dz :
+                isodd(m) ? Do :
+                           De
+
+            Uφf[mi, :] = D * Uf[mi, :]
         end
 
-        for ni in 1:size(Gf,2)
-            n = Ns[ni]
-            if abs(n) > div(N,2)
-                Gf[:, ni] = 0
-            end
-        end
-
-        Gλf[:] = Mscale * Gf
-        Sφ!(Gφf, Gf)
-
-        for ni in 1:size(Gf,2)
-            n = Ns[ni]
-            if abs(n) > div(N,2)
-                Gφf[:, ni] = 0
-            end
-        end
-
-        # ift_latitude!(Gλm, Gλf) # ah well FIXME
-        # ift_latitude!(Gφm, Gφf)
-        Fiφ!(Gλm, Gλf)
-        Fiφ!(Gφm, Gφf)
-
-        Gλm .*= lat_trunc_mask
-        Gφm .*= lat_trunc_mask
-
-        Fiλ!(Gx, Gλm)
-        Fiλ!(Gy, Gφm)
-
-        # FIXME
-        for λi in 1:size(Gx, 1)
-            Gx[λi, :] .*= pole_scale
-            Gy[λi, :] .*= pole_scale
-        end
-
-        Gx, Gy
+        Uλf, Uφf
     end
 end
 

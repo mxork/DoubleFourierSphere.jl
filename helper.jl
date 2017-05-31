@@ -130,3 +130,28 @@ function expand_modes!(Uf, Uf_trunc)
 
     Uf
 end
+
+# this works in the repl, but not here. literal copy-pasta
+# FIXME
+function axisymmetric_stream_function(U, θ=pi/4)
+    L, P = spheregrids(size(U)...)
+    R = ones(U)
+    P -= π/2
+
+    X, Y, Z = sph2cart(L, R, P)
+    Xo, Yo, Zo = similar(X), similar(Y), similar(Z)
+
+    rot = eye(3)
+    rot[2:3, 2:3] = [cos(θ) -sin(θ) ; sin(θ) cos(θ)]
+
+    # not the best, but it works
+    for j = 1:size(X,2), i = 1:size(X,1)
+        post = rot * [ X[i,j] , Y[i,j], Z[i,j] ]
+        Xo[i,j], Yo[i,j], Zo[i,j] = post[1], post[2], post[3]
+	  end
+
+    L, P, R = cart2sph(Xo, Yo, Zo)
+
+    Stream = ((l,p) -> sin(p)).(L, P)
+    Stream
+end

@@ -3,9 +3,9 @@ function plan_advection_spectral!(Uf)
     M, Ms = zonal_modes(Uf)
     N, _ ,_ = meridional_modes(Uf)
 
-    Az = sin2_zero!(spzeros(N, N))
-    Ao = sin2_odd!(spzeros(N, N))
-    Ae = sin2_even!(spzeros(N, N))
+    # Az = sin2_zero!(spzeros(N, N))
+    # Ao = sin2_odd!(spzeros(N, N))
+    # Ae = sin2_even!(spzeros(N, N))
 
     Dz = sinφdφ_zero!(spzeros(N, N))
     Do = sinφdφ_odd!(spzeros(N, N))
@@ -17,11 +17,16 @@ function plan_advection_spectral!(Uf)
 
     Uλf = similar(Uf)
     Uφf = similar(Uf)
-    U_working = similar(Uf)
 
     F! = plan_fft_sphere!(Uf)
-    Fi! = plan_ift_sphere!(Uf)
+    Fiφ! = plan_ift_latitude!(Uf)
+    Fiλ! = plan_ifft_longitude!(Uf)
     # truncation would go here TODO
+
+    Uλm = similar(Uf) 
+    Uφm = similar(Uf)
+
+    lat_trunc_mask = latitude_truncation_mask(Uf)
 
     Uλ = similar(Uf) 
     Uφ = similar(Uf)
@@ -41,9 +46,19 @@ function plan_advection_spectral!(Uf)
             Uφf[mi, :] = D * Uf[mi, :]
         end
 
+        # and the top meridional modes are garbage
+        Uλf[:, end] = 0
+        Uφf[:, end] = 0
+
         # let's do this explicit
-        Fi!(Uλ, Uλf)
-        Fi!(Uφ, Uφf)
+        Fiφ!(Uλm, Uλf)
+        Fiφ!(Uφm, Uφf)
+
+        Uλm .*= lat_trunc_mask
+        Uφm .*= lat_trunc_mask
+
+        Fiλ!(Uλ, Uλm)
+        Fiλ!(Uφ, Uφm)
 
         Uλ .*= Vx
         Uφ .*= Vy
