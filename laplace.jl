@@ -2,16 +2,17 @@ export laplace, laplace_inv, plan_laplace_inv!
 
 # computes the laplacian of U over a sphere
 function laplace(U)
-    Uf = fft_sphere(U)
+    Ufbig = fft_sphere(U)
+    Uf = trunc_modes!( Array{Complex128,2}(div(size(U,1),2), div(size(U,2), 2) ), Ufbig)
+    # Uf = fft_sphere(U)
     Gf = zeros(Uf)
 
-    D = zeros( size(U,2), size(U,2))
-    A = zeros( size(U,2), size(U,2))
+    D = zeros( size(Uf,2), size(Uf,2))
+    A = zeros( size(Uf,2), size(Uf,2))
 
     # m zero
     DAzero!(D, A)
-    # Gf[1, :] = A \ (D * Uf[1, :] )
-    Gf[1, :] = (D * Uf[1, :] )
+    Gf[1, :] = A \ (D * Uf[1, :] )
 
     M, Ms = zonal_modes(Gf)
 
@@ -22,11 +23,12 @@ function laplace(U)
         else
           DAeven!(D, A, m)
         end
-        # Gf[mi, :] = A \ (D * Uf[mi, :])
-        Gf[mi, :] =  (D * Uf[mi, :])
+        Gf[mi, :] = A \ (D * Uf[mi, :])
     end
 
-    ifft_sphere(Gf)
+    Gfbig = expand_modes!(similar(Ufbig), Gf)
+    ift_sphere(Gfbig)
+    # ift_sphere(Gfbig)
 end
 
 function laplace_inv(G)
@@ -34,7 +36,7 @@ function laplace_inv(G)
 
     Uf = laplace_inv_spectral(Gf)
 
-    ifft_sphere(Uf)
+    ift_sphere(Uf)
 end
 
 # like laplace_inv but from spectral to spectral
@@ -47,7 +49,75 @@ end
 # throw a lot of garbage
 # ugly as hell
 
-function plan_laplace_inv!(Gf)
+function plan_laplace!(G)
+    F! = plan_fft_sphere!(G)
+    Fiφ! = plan_ift_latitude!(G) # FIXME
+    Fiλ! = plan_ifft_longitude!(G)
+
+
+    Gf = similar(G)
+    Gfs =  Array{Complex128,2}(div(size(G,1),2), div(size(G,2), 2)+2) # +2 for shift
+
+    Lf! = plan_laplace_spectral!(Gfs)
+
+    Ufs = similar(Gfs)
+    Uf = similar(Gf)
+    Um = similar(Gf)
+
+    lat_trunc_mask = latitude_truncation_mask(Uf)
+
+    function (U, G)
+        F!(Gf, G)
+        trunc_modes!(Gfs, Gf)
+        Lf!(Ufs, Gfs)
+        Ufs[:, end-1:end] = 0 # zero the top +2 mode
+        expand_modes!(Uf, Ufs)
+        Fiφ!(Um, Uf)
+        Um .*= lat_trunc_mask
+        Fiλ!(U, Um)
+    end
+end
+
+function plan_laplace_spectral!(Gf)
+    M, Ms = zonal_modes(Gf)
+    N, Ns0, Ns = meridional_modes(Gf)
+
+    # gonna be backsolving D, so LU it
+    Ds = Array{ SparseMatrixCSC{Float64, Int64}, 1 }( size(Ms) )
+    As = Array{ SparseArrays.UMFPACK.UmfpackLU, 1 }( size(Ms) )
+
+    D = Array{Float64, 2}(N, N)
+    A = similar(D)
+
+    for mi in 1:size(Ms,1)
+        m = Ms[mi]
+
+        if m == 0
+            DAzero!(D, A)
+            D[1,1] = 1.0
+        elseif isodd(m)
+            DAodd!(D, A, m)
+        else
+            DAeven!(D, A, m)
+        end
+
+        # pretreat the matrices a little to make 'em faster
+        Ds[mi] = sparse(D)
+        As[mi] = lufact(sparse(A))
+    end
+
+    function (Uf, Gf)
+        # everything else
+        for mi in 1:size(Ms,1)
+            D, A = Ds[mi], As[mi]
+            Uf[mi, :] = A \ (D * Gf[mi, :])
+        end
+        Uf[:, end] = 0
+        Uf
+    end
+end
+
+function plan_laplace_spectral_inv!(Gf)
     M, Ms = zonal_modes(Gf)
     N, Ns0, Ns = meridional_modes(Gf)
 
@@ -94,91 +164,3 @@ function plan_laplace_inv!(Gf)
         Uf
     end
 end
-
-
-# Linear systems corresponding to laplacian in frequency space. 
-# Infers the size of the target vector from input arguments, writes result to
-# arguments.
-
-# TODO consider using a sparse matrix set up. just call sparse(A), sparse(D)
-# TODO consider factoring these into true tridiagonals, of halfsize (would have)
-# to hack the stride of the matrices to get the right entries w/o a copy.
-
-function DAzero!(D, A)
-    M = 0 # by definition
-    @assert size(D) == size(A)
-
-    # some bounds trickery cuz offset here
-    for ji in 1:size(D,2), ii in 1:size(D,1)
-        i, j = ii-1, ji-1
-
-        D[ii,ji] =
-            i==j   ? -(i^2 + 2*M^2)/2 :
-            j==i-2 ? (i-1)*(i-2)/4 :
-            j==i+2 ? (i+1)*(i+2)/4 :
-            0
-
-        D[1,1] = 0 # from comment in Cheong
-        D[3,1] = 0 # ditto
-
-        A[ii,ji] =
-            i==j   ? 1/2 :
-            j==i-2 ? -1/4 :
-            j==i+2 ? -1/4 :
-            0
-    end
-
-    # from comment in cheong, §2.4
-    A[2,2] = 1/4
-    A[3,1] = -1/2
-
-    # two more equalities given in Cheong
-    A[1,3] = -1/4
-    D[1,3] = 1/2
-end
-
-function DAodd!(D, A, M)
-    @assert isodd(M)
-    @assert size(D) == size(A)
-
-    # apparently, inner loop should be first in Julia
-    # @inbounds
-    for j in 1:size(D,2), i in 1:size(D,1)
-        D[i,j] =
-            i==j   ? -(i^2 + 2*M^2)/2 :
-            j==i-2 ? (i-1)*(i-2)/4 :
-            j==i+2 ? (i+1)*(i+2)/4 :
-            0
-
-        A[i,j] =
-            i==j   ? 1/2 :
-            j==i-2 ? -1/4 :
-            j==i+2 ? -1/4 :
-            0
-    end
-
-    A[1,1] = 3/4;
-end
-
-function DAeven!(D, A, M)
-    @assert iseven(M)
-    @assert size(D) == size(A)
-
-    # @inbounds
-    for j in 1:size(D,2), i in 1:size(D,1)
-        D[i,j] =
-            i==j   ? -(i^2 + 2*M^2)/2 :
-            j==i-2 ? i*(i-1)/4 :
-            j==i+2 ? i*(i+1)/4 :
-            0
-
-        A[i,j] =
-            i==j   ? 1/2 :
-            j==i-2 ? -1/4 :
-            j==i+2 ? -1/4 :
-            0
-    end
-
-    A[1,1] = 3/4;
-end
-

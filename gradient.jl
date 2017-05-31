@@ -136,28 +136,6 @@ function plan_sinφdφ!(Ψf)
     end
 end
 
-# returns the matrix corresponding to the sinφdφ
-# operator in frequency space
-function sinφdφ_zero(N)
-    return [ j==i+1 ?  -(i+1)/2:
-             j==i-1 && i!=N ? (i-1)/2:
-             0
-             for i in 0:N-1, j in 0:N-1]
-end
-
-function sinφdφ_odd(N)
-    return [ j==i+1 ?  -(i+1)/2:
-             j==i-1 && i!=N ? (i-1)/2:
-             0
-             for i in 1:N, j in 1:N]
-end
-
-function sinφdφ_even_not_zero(N)
-    return [ j==i+1 ?  -i/2 :
-             j==i-1 && i!=N ? i/2 :
-             0
-             for i in 1:N, j in 1:N]
-end
 
 # Binary matrix (1s and 0s) corresponding to a truncation of high zonal
 # frequencies near poles. The exact point of truncation is up for massage.
@@ -168,16 +146,4 @@ function latitude_truncation_mask(A)
 
     return [ abs(m) > upper_limit(φ) ? 0 : 1
              for m in Ms, φ in Φs]
-end
-
-function iter_step(Gnxt, G, Vx, Vy, Gx, Gy, GRAD)
-    Gnxt[:] = G[:]
-    GRAD(Gx, Gy, G)
-
-    while norm(Gnxt - G - (Vx.*Gx + Vy.*Gy)) > 1e-10
-        Gnxt[:] = G + (Vx.*Gx + Vy.*Gy)
-        GRAD(Gx, Gy, Gnxt)
-    end
-
-    G[:] = Gnxt[:]
 end

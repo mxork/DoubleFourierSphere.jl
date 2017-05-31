@@ -6,16 +6,6 @@ function fft_sphere(U)
     Fs! = plan_fft_sphere!(U)
     Fs!(Uf, U)
 
-    # hack
-    M, Ms = zonal_modes(Uf)
-    N, Ns0, Ns = meridional_modes(Uf)
-
-    for ni in 1:size(Uf,2), mi in 1:size(Uf,1)
-        m, n = Ms[mi], mi==1 ? Ns0[ni] : Ns[ni]
-        if abs(m) >= div(M,2) || abs(n) >= div(N,2)
-            Uf[mi, ni] = 0
-        end
-    end
     Uf
 end
 
@@ -311,8 +301,23 @@ function ift_sphere(Uf)
         end
     end
 
+    Um ./= size(Um, 2) # gootta normal
+
     # ifft meriodonal
     U = ifft(Um, 1)
+end
+
+function plan_ift_sphere!(Uf)
+    Fiφ! = plan_ift_latitude!(Uf) 
+    Fiλ! = plan_ifft_longitude!(Uf) 
+
+    Um = similar(Uf)
+
+    function (U, Uf)
+        Fiφ!(Um, Uf)
+        Fiλ!(U, Um)
+        U
+    end
 end
 
 function plan_ift_latitude!(Uf)

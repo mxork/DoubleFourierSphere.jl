@@ -102,3 +102,31 @@ end
 function average_sphere_spectral(Gf)
     sum( Gf[1, 1:2:end] .* (1 - ((0:2:size(Gf,2)-1).^2))) / size(Gf, 1) # cause we didn't normalize the longitude fft
 end
+
+# take out the crappy modes
+function trunc_modes!(Uf_trunc, Uf)
+    M, Ms = zonal_modes(Uf_trunc)
+    N, Ns0, Ns = meridional_modes(Uf_trunc)
+
+    M2 = M
+    N2 = N
+
+    # cross shape
+    Uf_trunc[1:M2, 1:N2] = Uf[1:M2, 1:N2]
+    Uf_trunc[(end-M2+1):end, 1:N2] = Uf[(end-M2+1):end, 1:N2]
+
+    Uf_trunc
+end
+
+# put the modes back into a larger matrix
+function expand_modes!(Uf, Uf_trunc)
+    Uf[:] = 0.0
+
+    M2 = div(size(Uf_trunc,1), 2)
+    N2 = size(Uf_trunc,2)
+
+    Uf[1:M2, 1:N2] = Uf_trunc[1:M2, 1:N2]
+    Uf[(end-M2+1):end, 1:N2] = Uf_trunc[(end-M2+1):end, 1:N2]
+
+    Uf
+end
