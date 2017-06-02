@@ -1,4 +1,4 @@
-export legendre, spheregrids, sphericalmode, fouriermode, plot_sphere, plot_frequency
+export legendre, spheregrids, sphericalmode, sphericalmode_complex, fouriermode, plot_sphere, plot_frequency
 export zonal_modes, meridional_modes, latitude_interior_grid
 
 # associated legendre polynomial 
@@ -35,6 +35,10 @@ end
 # n = θ wavenumber, latitude
 function sphericalmode(m,n)
     return (λ, θ) -> legendre(m,n,cos(θ)) .* cos(m*λ)
+end
+
+function sphericalmode_complex(m,n)
+    return (λ, θ) -> legendre(m,n,cos(θ)) .* exp(1.0im*m*λ)
 end
 
 # returns the n-m fourier mode on the sphere,
@@ -93,4 +97,61 @@ function latitude_interior_grid(A)
     N = size(A, 2)
     # Φs = [ π*(j+0.5)/N for j in 0:N-1]
     Φs = 0.5*π/N:π/N:π*(1-0.5*1/N)
+end
+
+function average_sphere_spectral(Gf)
+    sum( Gf[1, 1:2:end] .* (1 - ((0:2:size(Gf,2)-1).^2))) / size(Gf, 1) # cause we didn't normalize the longitude fft
+end
+
+# take out the crappy modes
+function trunc_modes!(Uf_trunc, Uf)
+    M, Ms = zonal_modes(Uf_trunc)
+    N, Ns0, Ns = meridional_modes(Uf_trunc)
+
+    M2 = M
+    N2 = N
+
+    # cross shape
+    Uf_trunc[1:M2, 1:N2] = Uf[1:M2, 1:N2]
+    Uf_trunc[(end-M2+1):end, 1:N2] = Uf[(end-M2+1):end, 1:N2]
+
+    Uf_trunc
+end
+
+# put the modes back into a larger matrix
+function expand_modes!(Uf, Uf_trunc)
+    Uf[:] = 0.0
+
+    M2 = div(size(Uf_trunc,1), 2)
+    N2 = size(Uf_trunc,2)
+
+    Uf[1:M2, 1:N2] = Uf_trunc[1:M2, 1:N2]
+    Uf[(end-M2+1):end, 1:N2] = Uf_trunc[(end-M2+1):end, 1:N2]
+
+    Uf
+end
+
+# this works in the repl, but not here. literal copy-pasta
+# FIXME
+function axisymmetric_stream_function(U, θ=pi/4)
+    L, P = spheregrids(size(U)...)
+    R = ones(U)
+    P -= π/2
+
+    X, Y, Z = sph2cart(L, R, P)
+    Xo, Yo, Zo = similar(X), similar(Y), similar(Z)
+
+    rot = eye(3)
+    rot[2:3, 2:3] = [cos(θ) -sin(θ) ; sin(θ) cos(θ)]
+
+    # not the best, but it works
+    for j = 1:size(X,2), i = 1:size(X,1)
+        post = rot * [ X[i,j] , Y[i,j], Z[i,j] ]
+        Xo[i,j], Yo[i,j], Zo[i,j] = post[1], post[2], post[3]
+	  end
+
+    L, P, R = cart2sph(Xo, Yo, Zo)
+
+    Stream = ((l,p) -> sin(p)).(L, P)
+    Stream
 end
