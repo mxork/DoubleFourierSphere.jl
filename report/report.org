@@ -54,7 +54,7 @@ This spectral method is founded on the simple fact that the sphere is periodic
 in any directions on it's surface, much like the torus. However, because the
 sphere is not a torus, there is no convenient parameterization of the sphere's
 surface which is injective and periodic: the standard parameterization (call it
-$\mathbf{x}(\lambda, \phi)$ is neither injective at the poles ($\phi = 0$), and
+$\mathbf{x}(\lambda, \phi)$) is neither injective at the poles ($\phi = 0, \pi$), and
 the polar angle is only half-periodic.
 
 We can address the pole non-injectivity in our scheme by arranging for our
@@ -62,7 +62,6 @@ spatial discretization to miss the poles; the restriction on the polar angle is
 more troublesome. If we naively extend the domain of $\mathbf{x}$ to cover the
 full range of $\phi \in [0,2\pi)$, we double cover the surface. We need to take
 some precautions to prevent garbage coming out.
-
 
 When we go over one of the poles of the sphere along a line of constant $\lambda$,
 say from the western hemisphere going north, we emerge in the *eastern* hemisphere going
@@ -89,7 +88,7 @@ b_{m,n} = e^{im\lambda}
   \end{cases}
 \end{equation*}
 
-Which are continuous on the extension. Other bases are possible[fn:other-bases].
+Which are smooth on the extension. Other bases are possible[fn:other-bases].
 
 *** Gotcha
 Note that for $m \neq 0$, the $n=0$ modes are degenerate. Hence, the meridional
@@ -144,19 +143,6 @@ Plots.plot( plot_sphere(real(U)), plot_frequency(abs(Uf)) )
 Plots.savefig("output-images/output.png")
 #+end_src
 
-*** TODO caption
- #+CAPTION: 
- # [[demos/output-images/demo-fft.png]]
-
-*** TODO random functions and transforms
-We test the inverse transform by checking idempotency of it's composition with
-the forward transform: ~ifft_sphere(fft_sphere(U)) ≈ U~:
-
-# [[demos/output-images/demo-ifft.png]]
-
-We're good to within machine epsilon.
- 
-
 * Diffusion, and Poisson's equation
 ** the scheme
 
@@ -164,7 +150,7 @@ The structural similarity of the double Fourier modes and the spherical
 harmonics gives us good reason to hope that the Laplacian will have a simple
 structure in Fourier space (though, perhaps, not as simple as on a torus). We
 will lay out the trigonometry in some detail, and obtain a tridiagonal system of
-linear equations for the spectral coefficients of $g$, given $\triangle u = g$.
+linear equations for the spectral coefficients of $g$, given $\laplace u = g$.
 Solving the Poisson equation is just a matter of backsolving these linear
 equations.
 
@@ -294,23 +280,9 @@ u^{t+1}                  &= (1-\Delta t^2\laplace)^{-1} [ 2u^t - u^{t-1} ] \\
 Playing loosely with notation, the scheme is stable so long as
 $1-\Delta t^2\laplace > 2 - \frac{u^{t-1}}{u^t}$, which follows inductively so
 long as $u^1$ and $u^0$ are sufficiently close (ie. the initial velocity
-conditions are gentle). If we imagine that our scheme is seeded by doing
-an explicit Euler step with a given iniital velocity, $v^0$, then:
+conditions are gentle). 
 
-\begin{equation*} 
-u^1 = u^0 + \Delta t v^0 
-\end{equation*} 
-
-Subbing into our inequality:
-
-*** TODO  this is not enough 
-\begin{align*} 
-1-\Delta t^2\laplace &> 2 - \frac{u^0}{u^0 + \Delta t v^0} \\
-1-\Delta t^2\laplace &> 2 - [ 1 - \Delta t\frac{v^0}{u^0} + (\Delta t\frac{v^0}{u^0})^2 - ... ] \\
--\Delta t^2\laplace  &> + \Delta t\frac{v^0}{u^0} - (\Delta t\frac{v^0}{u^0})^2 - ...
-\end{align*} 
-
-** TODO code
+** code
 
 - ~plan_wave_spectral!(Uf, dt) → function(Uf1, Uf0)~
 
@@ -319,10 +291,11 @@ the time step by dt, given $u^t$ as ~Uf1~, and $u^{t-1}$ as ~Uf0~.
  
 ** demos
 
-*** TODO analytic?
-
 We run our scheme on a gaussian bump, with zero initial velocity:
 
+#+caption stuff
+
+*** TODO image
 
 * Advection equation
 
@@ -341,26 +314,67 @@ tridiagonal, so we use that. We take the inverse Fourier transform of the
 gradient to compute the pointwise product of the gradient with the flow field.
 We return to Fourier space to compute the explicit time step.
 
-Without further treatment, this scheme is unstable. We have several options to improve stability:
-one, take a sufficiently small time step to obtain weak stability; two, introduce artifical diffusion;
-three, do something different. Something different in this case is outlined below.
+Without further treatment, this scheme is unstable. We have options to improve
+stability: we can use an implicit scheme, or introduce artificial diffusion.
+We discuss the stability further after writing down the gradient-as-matrix.
 
-** math 
+** tridiagonal
 
-*** TODO tridiagonal 
-The tridiagonal system is as follows:
+The linear system for the gradient (times $\sin\phi$) is as follows:
 
-*** TODO stability
+\begin{align*}
+(\sin\phi\partial_\phi u)_{m,n} =
+\begin{cases}
+  \frac{n}{2}[ u_{m,n-1} - u_{m,n+1}] & \text{if m even, $\neq 0$} \\
+  \recip{2}[ (n-1)u_{m,n-1} - (n+1)u_{m,n+1}] & \text{if m odd, $m \eq 0$} 
+\end{cases} \\
+(\partial_\lambda u)_{m,n} = im u_{m,n}
+\end{align*}
 
-We mentioned three approaches to stability. We perform the stability analysis of
-the naive scheme, and then turn our attention to the particular cases.
+And it remains to divide by $\sin\phi$ after leaving frequency space to compute
+the true gradient.
 
-\begin{equation*}
-u^{t+1} = u^t + (v_x, v_y) \cdot \nabla u^t
-\end{equation*}
+** stability
+We begin by looking at explicit Euler:
+
+\begin{align*}
+u^{t+1} = u^t - \Delta t \mathbf{v} \cdot \nabla u^t \\
+u^{t+1} = (1 - \Delta t (\mathbf{v} \cdot \nabla)) u^t
+\end{align*}
+
+Where the stability clearly depends on $\nabla$.
+The gradient itself has purely imaginary eigenvalues, so the eigenvalues
+of $1- \Delta t (\mathbf{v} \cdot \nabla)$ will  have modulus $>1$, and,
+hence, the scheme will be unstable.
+
+An implicit version of the above works better:
+
+\begin{align*}
+u^{t+1} = u^t - \Delta t \mathbf{v} \cdot \nabla u^t+1 \\
+u^{t+1} = (1 + \Delta t (\mathbf{v} \cdot \nabla))^{-1} u^t
+\end{align*}
+
+We could also take a convex combination (with the implicit coefficient slightly
+greater than $\recip{2}$ to account for rounding error) to reduce the diffusive
+effects of the implcicit time step. However, this would approximately double the
+number of computations per time step. 
+
+Since we do not have a convenient computational form for the inverse operator, we
+are forced to use an implicit solver (eg. fixed point iteration, secant method, etc).
+This may considerably increase the number of funtion evaluations per time step, in which
+case the additional accuracy of using C-N would be justified. 
+
+The demos below were generated by an explicit time step with artificial diffusion added,
+on the order of $|\mathbf{v}|\Delta x$.
 
 ** code
+   
+- ~plan_advection!(Uf) → function(Uf, Vx, Vy, dt)~
+
 ** demos
+   
+We advect a pair of gaussian bumps on the sphere subject to an axisymmetric velocity
+field; we take the rotation axis to be offset by $\frac{\pi}{4}$ from the coordinate axis.
 
 * Footnotes
 
