@@ -1,51 +1,87 @@
 #+STARTUP: showstars
 #+STARTUP: latexpreview 
 
+#+LATEX_HEADER: \usepackage{amsmath}
+#+LATEX_HEADER: \usepackage{fontspec}
+#+LATEX_HEADER: \usepackage{unicode-math}
+
+#+LATEX_HEADER: \setmonofont[Scale=0.8]{Droid Sans Mono}
+
+#+LATEX_HEADER: \def\R{\mathbb{R}}
+#+LATEX_HEADER: \newcommand{\recip}[1]{\frac{1}{#1}}
+#+LATEX_HEADER: \newcommand{\laplace}{\nabla^2}
+#+LATEX_HEADER: \newcommand{\Id}{\mathbf{\text{Id}}}
+
 #+title: Fourier series on the sphere
+#+author: Dan Anderson, 260457325
+#+date: Fall 2016, eventually
 
 * Introduction 
-
 ** Overview
 
-This paper is entirely an implementation of a scheme published by Cheong[^] in ~Julia~ [^].
-We'll re-derive some results in more detail, and prove others which the original author
-omitted. The aim is to display a fluency in the methods used, and make something useful.
+This paper is entirely an implementation of a general spectral method published
+by Cheong[fn:cheong] in ~Julia~[fn:julia-page]. We'll re-derive some results in
+more detail, and prove others which the original author omitted. The aim is to
+display a command of the methods used, and make something useful.
 
-** Notation
+** TODO Notation
 
 We adopt some notational conventions which we will use throughout the paper, and which
 match that used in the code. 
 
 Throughout, we assume our sphere has radius one.
 
-| math symbol      | description                                                                                |
-|------------------+--------------------------------------------------------------------------------------------|
-| $u$, $g$, $\eta$ | Functions (generally real-valued) defined on the unit sphere.                              |
-| $u_{m,n}$        | The spectral coefficient of $u$, with zonal wavenumber $m$, and meridional wavenumber $n$. |
-| $\lambda$        | Longitude, taken over $[0, 2\pi)$.                                                         |
-| $\phi$           | Latitude, taken over $(0,\pi)$.                                                            |
+| math symbol      | description                                                             |
+|------------------+-------------------------------------------------------------------------|
+| $u$, $g$, $\eta$ | Functions (generally real-valued) defined on the unit sphere.           |
+| $u_{m,n}$        | Spectral coefficient of $u$, with zonal/meridional wavenumber $m$, $n$. |
+| $λ$              | Longitude, taken over $[0, 2\pi)$.                                      |
+| $φ$              | Latitude, taken over $(0,\pi)$.                                         |
 
-| code symbol | description                                                                                                                      |
-|-------------+----------------------------------------------------------------------------------------------------------------------------------|
-| ~U, G, H~     | Function values (generally real) taken on a $(\lambda, \phi)$ uniform grid.                                                      |
-| ~Uf, Gf, Hf~  | Spectral coefficient matrices, complex.                                                                                          |
-| ~Hλ, Hφ~      | Partial derivatives.                                                                                                             |
-| ~Λs, Φs~      | Coordinate vectors. Longitudinal values are uniformly spaced starting at 0, latitude uniformly spaced but offset by a half-step. |
-
-
-** Pictures 
-
-*** reflection
-*** figure 8
+| code symbol  | description                                                                 |
+|--------------+-----------------------------------------------------------------------------|
+| ~U, G, H~    | Function values (generally real) taken on a $(\lambda, \phi)$ uniform grid. |
+| ~Uf, Gf, Hf~ | Spectral coefficient matrices, complex.                                     |
+| ~Uλ, Uφ~     | Partial derivatives.                                                        |
+| ~Λs~         | Longitude coordinates. Uniformly spaced, starting at 0.                     |
+| ~Φs~         | Latitude coordinates, uniform spacing from $0+\frac{pi}{N}$                 |
 
 
 * The transform
 ** math
 
+This spectral method is founded on the simple fact that the sphere is periodic
+in any directions on it's surface, much like the torus. However, because the
+sphere is not a torus, there is no convenient parameterization of the sphere's
+surface which is injective and periodic: the standard parameterization (call it
+$\mathbf{x}(\lambda, \phi)$ is neither injective at the poles ($\phi = 0$), and
+the polar angle is only half-periodic.
+
+We can address the pole non-injectivity in our scheme by arranging for our
+spatial discretization to miss the poles; the restriction on the polar angle is
+more troublesome. If we naively extend the domain of $\mathbf{x}$ to cover the
+full range of $\phi \in [0,2\pi)$, we double cover the surface. We need to take
+some precautions to prevent garbage coming out.
+
+
+When we go over one of the poles of the sphere along a line of constant $\lambda$,
+say from the western hemisphere going north, we emerge in the *eastern* hemisphere going
+*south*. This is a phase shift by $\pi$, and a flip in the sign of $\phi$. For each basis
+function $b(\dot,\dot)$ we define on $\phi \in (0, \pi)$, we need to ensure that it is continuous and
+sufficiently smooth when we take the extension:
+
+\begin{equation*}
+\overline{b}(\lambda, \phi) = 
+  \begin{cases}
+    b(\lambda, \phi) & \phi \in [0, \pi) \\
+    b(\lambda+\pi, 2\pi-\phi) & \phi \in [\pi, 2\pi)
+  \end{cases}
+\end{equation*}
+
 Our transform uses the basis functions of Cheong:
 
 \begin{equation*}
-b_{m,n} = \exp{im\lambda}
+b_{m,n} = e^{im\lambda}
   \begin{cases}
   \cos{n\phi}  &  m=0 \\
   \sin{n\phi}   &  m \text{ is odd} \\
@@ -53,29 +89,34 @@ b_{m,n} = \exp{im\lambda}
   \end{cases}
 \end{equation*}
 
-Which satisfy the pole conditions. We take a discretization of the sphere
-surface which avoids points directly at the poles (ie. $\sin{\phi} = 0$), so we
-can use the FFT sine transform on the substituted variable $g' = \frac{}{}$, and
-avoid division by zero.
+Which are continuous on the extension. Other bases are possible[fn:other-bases].
+
+*** Gotcha
+Note that for $m \neq 0$, the $n=0$ modes are degenerate. Hence, the meridional
+wavenumbers of the mode will depend on which $m$ we are manipulating. In the
+following, if explicit bounds are not specified on $\sum\limits_{m,n}$, we are taking
+$m = -M, -M+1, ..., 0, ..., M$, and $n = 0, 1, ..., N-1$ if $m=0$, or 
+$n = 1, 2, ..., N$ otherwise. For the moment, $M$ and $N$ are arbitrary.
+
+*** TODO  define the partial transform function, add some equations
+
+The advantage of this basis over, say, the spherical harmonics, is that we get to use
+the FFT. We can perform the longitudinal transform $e^{im\lambda}$ with either a fast
+cosine routine or the full FFT (depending on real/complex values). The others
+can be performed with fast cosine/sine transforms, with the $m$-even using the
+variable substitution $u_m'(\phi) = \frac{u_m(\phi)}{\sin(\phi)}$ to use the
+fast sine transform directly. Since we have used a grid which avoids $\phi = 0$
+we can safely divide by $\sin{\phi}$, but we need to peform a frequency shift
+on the coefficients to (TODO transform property) compensate for the spatial shift.
 
 ** code
 
 We implement four main functions for the transform:
 
-- ~fft_sphere(  )~ 
-- ~ifft_sphere(  )~
-- ~plan_fft_sphere!(  )~
-- ~plan_ifft_sphere!(  )~
-
-Which are analogous to the ones found in any FFT package. The first two are
-convenient, and return a new matrix of the transform coefficients. The ~plan_*~
-functions are for speed; they each return a function which takes two arguments,
-~A~ and ~B~, computes the transform of ~A~, and writes the result to ~B~. All working
-memory is preallocated, and operators precomputed, so we avoid thrashing the
-garbage collector and performing redundant operations.
-
-#+begin_src julia 
-#+end_src
+- ~fft_sphere(U) → Uf~ 
+- ~ifft_sphere(Uf) → U~
+- ~plan_fft_sphere!(U) → ( function(B, A) → B )~
+- ~plan_ifft_sphere!(Uf) → ( function(B, A) → B )~
 
 ** demos and tests
 
@@ -89,8 +130,8 @@ using DoubleFourierSphere
 M = 4
 N = 3
 
-Gλ, Gφ = spheregrids(64,32)
-U = fouriermode(M,N)(Gλ, Gφ)
+Gambda , Gphi = spheregrids(64,32)
+U = fouriermode(M,N)(Gambda , Gphi)
 Uf = fft_sphere(U)
 
 # display
@@ -105,41 +146,110 @@ Plots.savefig("output-images/output.png")
 
 *** TODO caption
  #+CAPTION: 
- [[demos/output-images/demo-fft.png]]
+ # [[demos/output-images/demo-fft.png]]
 
 *** TODO random functions and transforms
- We test the inverse transform by checking idempotency of it's composition with
- the forward transport: $\text{} $:
+We test the inverse transform by checking idempotency of it's composition with
+the forward transform: ~ifft_sphere(fft_sphere(U)) ≈ U~:
 
-[[demos/output-images/demo-ifft.png]]
+# [[demos/output-images/demo-ifft.png]]
 
- We're good to within machine epsilon.
-   
+We're good to within machine epsilon.
+ 
 
-* Poisson's equation
-
+* Diffusion, and Poisson's equation
 ** the scheme
 
-The structural similarity of the Cheong basis and the spherical harmonics gives
-us good reason to hope that the Laplacian will have a simple structure in
-frequency space. We will lay out the trigonometry in some detail, and obtain a
-tridiagonal system of linear equations for the spectral coefficients of $g$,
-given $\triangle u = g$. Solving the Poisson equation is just a matter of
-backsolving these linear equations.
+The structural similarity of the double Fourier modes and the spherical
+harmonics gives us good reason to hope that the Laplacian will have a simple
+structure in Fourier space (though, perhaps, not as simple as on a torus). We
+will lay out the trigonometry in some detail, and obtain a tridiagonal system of
+linear equations for the spectral coefficients of $g$, given $\triangle u = g$.
+Solving the Poisson equation is just a matter of backsolving these linear
+equations.
+
+We also consider the solution of the diffusion equation in this context. It's not
+very interesting, but it templates what our approach will be for other time-evolving
+equations. We do an implicit Euler step:
+
+\begin{align*} 
+  u^{t+1} =& u^t + \Delta t\laplace u^{t+1} \\
+  u^{t+1} =& (\Id- \Delta t\laplace)^{-1} u^t
+\end{align*} 
 
 ** math
+*** TODO derivation of tridiagonal
 
-*** derivation of tridiagonal
+Consider the Laplacian operator in spherical coordinates:
 
+\begin{equation*}
+  \triangle u = \recip{\sin\phi}\partial_\phi(\sin\phi\partial_\phi u)
+  + \recip{\sin^2\phi\partial^2_\lambda u}
+\end{equation*}
+
+Multiply by $\sin^2(\phi)$. Subsitute in $u = \sum\limits_{m,n} u_{m,n} b_{m,n}(\lambda, \phi)$
+$g = \sum\limits_{m,n} g_{m,n} b_{m,n}(\lambda, \phi)$. Collecting coefficients, we obtain:
+
+*** TODO
+\begin{equation*} 
+  (n-2)(n-2)u_{m,n-2} - 2(n^2+2m^2)u_{m,n} + (n+1)(n+2)u_{m,n+2} 
+  = -g_{m,n-2} + 2g_{m,n} - g_{m,n+2}  \text{for $m$ odd or zero} \\
+\end{equation*}
+
+The $m$-even modes were subject to a substitution of $u'_{m,n} = \frac{u_{m,n}}{\sin\phi}$ during
+the spectral transform.
+
+\begin{equation*} 
+  n(n-1)u_{m,n-2} - 2(n^2+2m^2)u_{m,n} + n(n+1)u_{m,n+2} 
+  = -g_{m,n-2} + 2g_{m,n} - g_{m,n+2}  \ \text{for $m$ even}
+\end{equation*}
+
+*** TODO diffusion 
+
+We take a moment to prove unconditional stability (unsurprsing; it's a diffusion equation).
+
+As before, our scheme is:
+
+\begin{equation*} 
+  u^{t+1} = (1- \Delta t\laplace)^{-1} u^t
+\end{equation*} 
+
+As a computational convenience, we multiplied both sides by $\sin^2\phi$ to obtain tridiagonal
+systems, so techinically our step is:
+
+\begin{equation*} 
+  u^{t+1} = (\sin^2\phi - \Delta t \sin^2\phi \laplace)^{-1} \sin^2\phi u^t
+\end{equation*} 
+
+However, clearly the $\sin^2\phi$ factor will not alter the stability, so we ignore it.
+
+The stability of the scheme rests on the eigenvalues of $(1-\Delta t\laplace)^{-1}$:
+in particular we need $\laplace$ to have eigenvalues with negative real part.
+Thankfully this is the case, as for a spherical harmonic $Y^m_n(\lambda, \phi)$,
+$\laplace Y^m_n = -l(l+1)Y^m_n$. So long as the spherical harmonics are
+sufficiently well approximated in our basis, we are guaranteed stability.
+
+*** TODO finish claim of sphericals being okay
+Are they well approximated? Simply, yes. Since $Y^m_n(\lambda, \phi) \sim
+e^{im\lambda}P^m_n(\phi)$, where $P^m_n(\phi)$ is the $m$-, $n$-th Legendre
+polynomial, it suffices to consider whether $b_{m,n}(\phi)$ approximates
+$P^m_n(\phi)$. Since we chose $b_{m,n}$ to obey exactly the pole conditions
+which
+
+In any case, $\frac{u^{t+1}}{u^t} \leq \recip{1+2\Delta t}$ ($-2$ is the maximal
+eigenvalue), and stability is guaranteed. We have a scheme which is first order
+in time and spectral in space.
 
 ** code
 
-We implement two convenience functions, and a lower-level which we will use for
-performance reasons in the next section.
+- ~laplace(U) → G~
+- ~laplace_inv(G) → U~
+- ~plan_diffusion_spectral!(Uf, dt) → function(Uf)~
 
-- ~laplace~
-- ~laplace_inv~
-- ~plan_laplace_inv!~
+The first two functions take scalar fields and return the result of either the forward
+or inverse Laplacian (ie. for solving a Poisson equation). The third returns a function
+which operates in-place on a matrix of spectral coefficients, implicity advancing the
+time by a fixed step of $\Delta t$. The diffusivity constant is taken to be 1.
 
 ** demos
 
@@ -149,7 +259,7 @@ harmonic and verifying the eigenfunction property:
 #+begin_src: julia
 #+end_src 
 
-[[demos/output-images/demo-laplace.png]]
+# [[demos/output-images/demo-laplace.png]]
 
 Similar to the case for ~ifft_sphere~, we verify the performance of the inverse Laplcian 
 by confirming that it's composition with the forward Laplacian is identity (up to a constant
@@ -158,49 +268,103 @@ factor):
 #+begin_src: julia
 #+end_src
 
-[[demos/output-images/demo-laplace_inv.png]]
+# [[demos/output-images/demo-laplace_inv.png]]
 
-* Vorticity, 2D inviscid
+*** TODO analytic scheme?
+Finally, we apply the diffusion scheme to a gaussian bump near one of the poles.  
+
+#+begin_src: julia
+#+end_src
+
+# [[demos/output-images/demo-diffusion.png]]
+
+
+* Wave equation
+** scheme
+
+Almost identically to the case of diffusion, but extending the finte
+difference in time to second order:
+
+\begin{align*}
+u^{t+1} - 2u^t + u^{t-1} &= \Delta t^2 \laplace u^{t+1} \\
+u^{t+1}                  &= (1-\Delta t^2\laplace)^{-1} [ 2u^t - u^{t-1} ] \\
+\frac{u^{t+1}}{u^t}      &= (1-\Delta t^2\laplace)^{-1} (2 - \frac{u^{t-1}}{u^t} )
+\end{align*}
+
+Playing loosely with notation, the scheme is stable so long as
+$1-\Delta t^2\laplace > 2 - \frac{u^{t-1}}{u^t}$, which follows inductively so
+long as $u^1$ and $u^0$ are sufficiently close (ie. the initial velocity
+conditions are gentle). If we imagine that our scheme is seeded by doing
+an explicit Euler step with a given iniital velocity, $v^0$, then:
+
+\begin{equation*} 
+u^1 = u^0 + \Delta t v^0 
+\end{equation*} 
+
+Subbing into our inequality:
+
+*** TODO  this is not enough 
+\begin{align*} 
+1-\Delta t^2\laplace &> 2 - \frac{u^0}{u^0 + \Delta t v^0} \\
+1-\Delta t^2\laplace &> 2 - [ 1 - \Delta t\frac{v^0}{u^0} + (\Delta t\frac{v^0}{u^0})^2 - ... ] \\
+-\Delta t^2\laplace  &> + \Delta t\frac{v^0}{u^0} - (\Delta t\frac{v^0}{u^0})^2 - ...
+\end{align*} 
+
+** TODO code
+
+- ~plan_wave_spectral!(Uf, dt) → function(Uf1, Uf0)~
+
+We implement a single function which returns a routine which advances
+the time step by dt, given $u^t$ as ~Uf1~, and $u^{t-1}$ as ~Uf0~.
+ 
+** demos
+
+*** TODO analytic?
+
+We run our scheme on a gaussian bump, with zero initial velocity:
+
+
+* Advection equation
 
 ** the scheme
 
-We consider baby case of the vorticity equation; we assume non-divergent and inviscid flow (though,
-allowing viscosity would not be difficult, and would improve stability somewhat). The equation is:
+\begin{align*}
+u^{t+1} &= u^t + (v_x, v_y) \cdot \nabla u^t \ \text{or,} \\
+u^{t+1} &= u^t + \recip{\sin\phi}(v_x, v_y)(\sin\phi\nabla)u^t  
+\end{align*}
 
-\begin{equation}
-\zeta_t = - \frac{}{}\eta_\lambda - \frac{}{}\eta_\phi
-\end{equation}
+Where $(v_x, v_y)$ is the constant in time, variable in space velocity field. 
 
-Where $\zeta$ is relative vorticity, $\eta$ is absolute vorticity, and subscripts denote partial
-derivatives. $U$ and $V$ are defined as follows:
+Identical to our approach to the Laplacian, we derive a linear system for
+computing the gradient of a scalar field: the action of $\sin\phi\nabla$ is
+tridiagonal, so we use that. We take the inverse Fourier transform of the
+gradient to compute the pointwise product of the gradient with the flow field.
+We return to Fourier space to compute the explicit time step.
 
-**** TODO 
-  \begin{equation}
-  \zeta_t = - \frac{}{}\eta_\lambda - \frac{}{}\eta_\phi
-  \end{equation}
+Without further treatment, this scheme is unstable. We have several options to improve stability:
+one, take a sufficiently small time step to obtain weak stability; two, introduce artifical diffusion;
+three, do something different. Something different in this case is outlined below.
 
-We begin by applying our Poisson solver to $\zeta$ to obtain $\psi$, the stream function. We derive
-the linear systems corresponding to $\partial_\lambda$ and $\sin{\phi}\partial_\phi$, and using them
-compute $U$, $V$ from the stream function, and the partial derivatives of $\eta$. We return to 
-normal space to compute the pointwise products. We are done.  
+** math 
 
-Not fully, though. Since we are (finally) integrating in time, we have to address stability. We 
-lean on the CFL condition to derive an expression for the maximal timestep allowed, and
-spitball a little on this, the interesting part of this paper.
+*** TODO tridiagonal 
+The tridiagonal system is as follows:
 
-** math
-*** derivation of tridiagonal
-*** stability
+*** TODO stability
 
-**** CFL condition and grid reduction
-**** Spherical harmonic filter
-***** linearization?
+We mentioned three approaches to stability. We perform the stability analysis of
+the naive scheme, and then turn our attention to the particular cases.
+
+\begin{equation*}
+u^{t+1} = u^t + (v_x, v_y) \cdot \nabla u^t
+\end{equation*}
 
 ** code
-
-- ~vorticity_run~
-- ~plan_dζf!~
-- ~~
- 
 ** demos
+
+* Footnotes
+
+[fn:cheong] H. Cheong, *Double Fourier series on a sphere*  ... (1997).
+[fn:julia-page] [[https://julialang.org]] 
+[fn:other-bases] S. A. Orszag, *Fourier series on spheres* ... (1974).
      
