@@ -35,7 +35,7 @@ function plan_wave_spectral!(Uf, dt)
             Uf0[mi, :] = Cs[mi] \ (As[mi]*U_working[mi, :])
         end
 
-        # this is a weird convenction CONFUSING
+        # this is a weird convention CONFUSING
         Uf0, Uf
     end
 end

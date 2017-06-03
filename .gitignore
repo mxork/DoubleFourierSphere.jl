@@ -7,5 +7,8 @@
 !*.md
 !*.jl
 !*.org
+!*.png
+!*.gif
 output-images/
 ltximg/
+tmp/

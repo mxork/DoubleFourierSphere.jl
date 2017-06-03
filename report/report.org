@@ -1,11 +1,17 @@
 #+STARTUP: showstars
 #+STARTUP: latexpreview 
 
+* TODO fix m coefficient in derivation
+* TODO add some absolute values
+
+#+LATEX_CLASS_OPTIONS: [10pt]
+
 #+LATEX_HEADER: \usepackage{amsmath}
 #+LATEX_HEADER: \usepackage{fontspec}
 #+LATEX_HEADER: \usepackage{unicode-math}
 
-#+LATEX_HEADER: \setmonofont[Scale=0.8]{Droid Sans Mono}
+#+LATEX_HEADER: \setmainfont{Linux Libertine}
+#+LATEX_HEADER: \setmonofont[scale=0.7]{Droid Sans Mono}
 
 #+LATEX_HEADER: \def\R{\mathbb{R}}
 #+LATEX_HEADER: \newcommand{\recip}[1]{\frac{1}{#1}}
@@ -24,29 +30,30 @@ by Cheong[fn:cheong] in ~Julia~[fn:julia-page]. We'll re-derive some results in
 more detail, and prove others which the original author omitted. The aim is to
 display a command of the methods used, and make something useful.
 
-** TODO Notation
+** Notation
 
 We adopt some notational conventions which we will use throughout the paper, and which
 match that used in the code. 
 
 Throughout, we assume our sphere has radius one.
 
-| math symbol      | description                                                             |
-|------------------+-------------------------------------------------------------------------|
-| $u$, $g$, $\eta$ | Functions (generally real-valued) defined on the unit sphere.           |
-| $u_{m,n}$        | Spectral coefficient of $u$, with zonal/meridional wavenumber $m$, $n$. |
-| $λ$              | Longitude, taken over $[0, 2\pi)$.                                      |
-| $φ$              | Latitude, taken over $(0,\pi)$.                                         |
+| math symbol | description                                                             |
+|-------------+-------------------------------------------------------------------------|
+| $u$, $g$    | Functions (generally real-valued) defined on the unit sphere.           |
+| $u_{m,n}$   | Spectral coefficient of $u$, with zonal/meridional wavenumber $m$, $n$. |
+| $λ$         | Longitude, taken over $[0, 2\pi)$.                                      |
+| $φ$         | Latitude, taken over $(0,\pi)$.                                         |
 
-| code symbol  | description                                                                 |
-|--------------+-----------------------------------------------------------------------------|
-| ~U, G, H~    | Function values (generally real) taken on a $(\lambda, \phi)$ uniform grid. |
-| ~Uf, Gf, Hf~ | Spectral coefficient matrices, complex.                                     |
-| ~Uλ, Uφ~     | Partial derivatives.                                                        |
-| ~Λs~         | Longitude coordinates. Uniformly spaced, starting at 0.                     |
-| ~Φs~         | Latitude coordinates, uniform spacing from $0+\frac{pi}{N}$                 |
+| code symbol | description                                                                 |
+|-------------+-----------------------------------------------------------------------------|
+| ~U, G~        | Function values (generally real) taken on a $(\lambda, \phi)$ uniform grid. |
+| ~Uf, Gf~      | Spectral coefficient matrices, complex.                                     |
+| ~Uλ, Uφ~      | Partial derivatives.                                                        |
+| ~Λs~          | Longitude coordinates. Uniformly spaced, starting at 0.                     |
+| ~Φs~          | Latitude coordinates, uniform spacing from $0+\frac{\Delta \phi}{2}$        |
 
 
+\newpage
 * The transform
 ** math
 
@@ -66,7 +73,7 @@ some precautions to prevent garbage coming out.
 When we go over one of the poles of the sphere along a line of constant $\lambda$,
 say from the western hemisphere going north, we emerge in the *eastern* hemisphere going
 *south*. This is a phase shift by $\pi$, and a flip in the sign of $\phi$. For each basis
-function $b(\dot,\dot)$ we define on $\phi \in (0, \pi)$, we need to ensure that it is continuous and
+function $b(\cdot,\cdot)$ we define on $\phi \in (0, \pi)$, we need to ensure that it is continuous and
 sufficiently smooth when we take the extension:
 
 \begin{equation*}
@@ -97,25 +104,27 @@ following, if explicit bounds are not specified on $\sum\limits_{m,n}$, we are t
 $m = -M, -M+1, ..., 0, ..., M$, and $n = 0, 1, ..., N-1$ if $m=0$, or 
 $n = 1, 2, ..., N$ otherwise. For the moment, $M$ and $N$ are arbitrary.
 
-*** TODO  define the partial transform function, add some equations
 
 The advantage of this basis over, say, the spherical harmonics, is that we get to use
 the FFT. We can perform the longitudinal transform $e^{im\lambda}$ with either a fast
-cosine routine or the full FFT (depending on real/complex values). The others
-can be performed with fast cosine/sine transforms, with the $m$-even using the
-variable substitution $u_m'(\phi) = \frac{u_m(\phi)}{\sin(\phi)}$ to use the
-fast sine transform directly. Since we have used a grid which avoids $\phi = 0$
-we can safely divide by $\sin{\phi}$, but we need to peform a frequency shift
-on the coefficients to (TODO transform property) compensate for the spatial shift.
+cosine routine or the full FFT (depending on real/complex values), and obtain the partially
+transformed function $u_m(\phi) = \sum\limits_{\lambda_i} u(\lambda_i, \phi)e^{im\lambda}$. 
+
+The latitude transform can be performed with fast cosine/sine transforms, with
+the $m$-even using the variable substitution $u_m'(\phi) =
+\frac{u_m(\phi)}{\sin(\phi)}$ to use the fast sine transform directly. Since we
+have used a grid which avoids $\phi = 0$ we can safely divide by $\sin{\phi}$,
+but we need to peform a frequency shift on the coefficients to compensate for
+the spatial shift.
 
 ** code
 
 We implement four main functions for the transform:
 
-- ~fft_sphere(U) → Uf~ 
-- ~ifft_sphere(Uf) → U~
-- ~plan_fft_sphere!(U) → ( function(B, A) → B )~
-- ~plan_ifft_sphere!(Uf) → ( function(B, A) → B )~
+- ~fft_sphere(U) --> Uf~ 
+- ~ifft_sphere(Uf) --> U~
+- ~plan_fft_sphere!(U) --> ( function(B, A) --> B )~
+- ~plan_ifft_sphere!(Uf) --> ( function(B, A) --> B )~
 
 ** demos and tests
 
@@ -129,8 +138,8 @@ using DoubleFourierSphere
 M = 4
 N = 3
 
-Gambda , Gphi = spheregrids(64,32)
-U = fouriermode(M,N)(Gambda , Gphi)
+Gλ, Gφ = spheregrids(64,32)
+U = fouriermode(M,N)(Gλ, Gφ)
 Uf = fft_sphere(U)
 
 # display
@@ -143,6 +152,13 @@ Plots.plot( plot_sphere(real(U)), plot_frequency(abs(Uf)) )
 Plots.savefig("output-images/output.png")
 #+end_src
 
+#+caption: Fourier mode and computed frequency components.
+[[file:figures/transform.png]]
+
+We test the inverse transform by checking that it is the inverse of the
+forward transform.
+
+\newpage
 * Diffusion, and Poisson's equation
 ** the scheme
 
@@ -164,33 +180,53 @@ equations. We do an implicit Euler step:
 \end{align*} 
 
 ** math
-*** TODO derivation of tridiagonal
 
 Consider the Laplacian operator in spherical coordinates:
 
-\begin{equation*}
-  \triangle u = \recip{\sin\phi}\partial_\phi(\sin\phi\partial_\phi u)
-  + \recip{\sin^2\phi\partial^2_\lambda u}
-\end{equation*}
+\begin{align*}
+  \laplace u = &\recip{\sin\phi}\partial_\phi(\sin\phi\partial_\phi u) + \recip{\sin^2\phi}\partial^2_\lambda u
+\end{align*}
 
-Multiply by $\sin^2(\phi)$. Subsitute in $u = \sum\limits_{m,n} u_{m,n} b_{m,n}(\lambda, \phi)$
-$g = \sum\limits_{m,n} g_{m,n} b_{m,n}(\lambda, \phi)$. Collecting coefficients, we obtain:
+Multiply by $\sin^2(\phi)$. Let $g=\laplace u$. Subsitute in series expansions: 
 
-*** TODO
-\begin{equation*} 
-  (n-2)(n-2)u_{m,n-2} - 2(n^2+2m^2)u_{m,n} + (n+1)(n+2)u_{m,n+2} 
-  = -g_{m,n-2} + 2g_{m,n} - g_{m,n+2}  \text{for $m$ odd or zero} \\
-\end{equation*}
+\begin{align*}
+u &= \sum\limits_{m,n} u_{m,n} b_{m,n}(\lambda, \phi)  \\
+g &= \sum\limits_{m,n} g_{m,n} b_{m,n}(\lambda, \phi)
+\end{align*}
 
-The $m$-even modes were subject to a substitution of $u'_{m,n} = \frac{u_{m,n}}{\sin\phi}$ during
-the spectral transform.
+Take derivatives, use sine/cosine addition formulae, remember that
+we divided the even modes by $\sin\phi$ during the transform.
 
-\begin{equation*} 
-  n(n-1)u_{m,n-2} - 2(n^2+2m^2)u_{m,n} + n(n+1)u_{m,n+2} 
-  = -g_{m,n-2} + 2g_{m,n} - g_{m,n+2}  \ \text{for $m$ even}
-\end{equation*}
+\begin{align*}
+\sin\phi \partial_\phi (\sin\phi \partial_\phi b_{m,n}) &= 
+\begin{cases}
+\recip{2}[ (n+1)(n+2)\cos((n+2)\phi) \\- 2n^2\cos(n\phi) + (n-1)(n-2)\cos((n-2)\phi)] 
+& \text{if $m$ zero} \\
+\recip{2}[ (n+1)(n+2)\sin((n+2)\phi) \\- 2n^2\sin(n\phi) + (n-1)(n-2)\sin((n-2)\phi)] 
+& \text{if $m$ odd} \\
+\recip{2}[ n(n+1)\sin\phi\((n+2)\phi) \\- 2n^2\sin\phi\sin(n\phi) + n(n-1)\sin\phi\sin((n-2)\phi)] 
+& \text{if $m$ even} 
+\end{cases} \\
+\partial^2_\lambda b_{m,n} &= -m^2 b_{m,n}
+\end{align*}
 
-*** TODO diffusion 
+We pull a similar trick on $\sin^2(\phi) g$. Collecting coefficients, we obtain for odd m:
+
+\begin{align*} 
+  &(n-2)(n-2)u_{m,n-2} - 2(n^2+2m^2)u_{m,n} + (n+1)(n+2)u_{m,n+2} 
+  \\&= -g_{m,n-2} + 2g_{m,n} - g_{m,n+2}   \\
+\end{align*}
+
+And for even m:
+
+\begin{align*} 
+  &n(n-1)u_{m,n-2} - 2(n^2+2m^2)u_{m,n} + n(n+1)u_{m,n+2} 
+  \\&= -g_{m,n-2} + 2g_{m,n} - g_{m,n+2}  
+\end{align*}
+
+Which is a tridiagonal system for each class of $m$. 
+
+** stability of diffusion
 
 We take a moment to prove unconditional stability (unsurprsing; it's a diffusion equation).
 
@@ -215,12 +251,13 @@ Thankfully this is the case, as for a spherical harmonic $Y^m_n(\lambda, \phi)$,
 $\laplace Y^m_n = -l(l+1)Y^m_n$. So long as the spherical harmonics are
 sufficiently well approximated in our basis, we are guaranteed stability.
 
-*** TODO finish claim of sphericals being okay
 Are they well approximated? Simply, yes. Since $Y^m_n(\lambda, \phi) \sim
-e^{im\lambda}P^m_n(\phi)$, where $P^m_n(\phi)$ is the $m$-, $n$-th Legendre
+e^{im\lambda}P^m_n(\phi)$, where $P^m_n(\phi)$ is the $m$ -, $n$ -th Legendre
 polynomial, it suffices to consider whether $b_{m,n}(\phi)$ approximates
 $P^m_n(\phi)$. Since we chose $b_{m,n}$ to obey exactly the pole conditions
-which
+which the spherical harmonics respect, there is no threat of Gibb's phenomenon,
+and the spherical harmonics will be consistently approximated by our truncated 
+series.
 
 In any case, $\frac{u^{t+1}}{u^t} \leq \recip{1+2\Delta t}$ ($-2$ is the maximal
 eigenvalue), and stability is guaranteed. We have a scheme which is first order
@@ -228,9 +265,9 @@ in time and spectral in space.
 
 ** code
 
-- ~laplace(U) → G~
-- ~laplace_inv(G) → U~
-- ~plan_diffusion_spectral!(Uf, dt) → function(Uf)~
+- ~laplace(U) --> G~
+- ~laplace_inv(G) --> U~
+- ~plan_diffusion_spectral!(Uf, dt) --> function(Uf)~
 
 The first two functions take scalar fields and return the result of either the forward
 or inverse Laplacian (ie. for solving a Poisson equation). The third returns a function
@@ -239,36 +276,51 @@ time by a fixed step of $\Delta t$. The diffusivity constant is taken to be 1.
 
 ** demos
 
-We verify the behaviour of the forward Laplcian by testing it on a non-constant spherical
-harmonic and verifying the eigenfunction property:
+We run the diffusion scheme on a gaussian bump located near one of the poles:
 
-#+begin_src: julia
-#+end_src 
+#+begin_src julia
+#demos/demo-diffusion.jl
+import DoubleFourierSphere; dfs = DoubleFourierSphere
+using Plots
+using JLD
 
-# [[demos/output-images/demo-laplace.png]]
+Plots.gr()
 
-Similar to the case for ~ifft_sphere~, we verify the performance of the inverse Laplcian 
-by confirming that it's composition with the forward Laplacian is identity (up to a constant
-factor):
+G = zeros(Complex128, 128, 64)
+G[13:33, 43:63] = [ e^(-0.03*x^2 - 0.03*y^2) 
+                    for x in -10:10, y in -10:10]
+G0 = copy(G)
+Gf = dfs.fft_sphere(G)
+Gf *= 3
 
-#+begin_src: julia
+# dt arbitrarily chosen
+Diffuse! = dfs.plan_diffuse_spectral!(Gf, 1e-4)
+
+anim = Animation()
+
+for i= 1:1000
+    Diffuse!(Gf)
+    if i%10 == 0
+    		Plots.heatmap(real( dfs.ift_sphere(Gf))', 
+                      color_limits=(0,1), colorbar=:none)
+        Plots.frame(anim)
+    end
+end
+
+gif(anim, "diffusion.gif", fps=10)
 #+end_src
 
-# [[demos/output-images/demo-laplace_inv.png]]
+#+caption: Diffusion, initial conditions
+[[file:figures/diffusion-first.png]]
 
-*** TODO analytic scheme?
-Finally, we apply the diffusion scheme to a gaussian bump near one of the poles.  
+#+caption: Diffusion, after 1000 time steps.
+[[file:figures/diffusion-last.png]]
 
-#+begin_src: julia
-#+end_src
-
-# [[demos/output-images/demo-diffusion.png]]
-
-
+\newpage
 * Wave equation
 ** scheme
 
-Almost identically to the case of diffusion, but extending the finte
+Almost identically to the case of diffusion, but extending the finite
 difference in time to second order:
 
 \begin{align*}
@@ -284,29 +336,69 @@ conditions are gentle).
 
 ** code
 
-- ~plan_wave_spectral!(Uf, dt) → function(Uf1, Uf0)~
+- ~plan_wave_spectral!(Uf, dt) --> function(Uf1, Uf0)~
 
 We implement a single function which returns a routine which advances
 the time step by dt, given $u^t$ as ~Uf1~, and $u^{t-1}$ as ~Uf0~.
  
 ** demos
 
+
 We run our scheme on a gaussian bump, with zero initial velocity:
 
-#+caption stuff
+#+begin_src julia
+#demos/demo-wave.jl
+import DoubleFourierSphere; dfs = DoubleFourierSphere
+using Plots
+using JLD
 
-*** TODO image
+Plots.gr()
 
+G = zeros(Complex128, 128, 64)
+G[13:33, 23:43] = [ e^(-0.03*x^2 - 0.03*y^2) for x in -10:10, y in -10:10]
+G *= 3
+
+G0 = copy(G)
+G1 = copy(G)
+G0f = dfs.fft_sphere(G0)
+G1f = dfs.fft_sphere(G1)
+
+# dt arbitrarily chosen
+Wave! = dfs.plan_wave_spectral!(G0f, 6e-3)
+
+anim = Animation()
+
+for i= 1:1000
+    G1f, G0f = Wave!(G1f, G0f)
+    if i%10 == 0
+        heatmap( real(dfs.ift_sphere(G1f))', color_limits=(-1,1), colorbar=:none)
+        Plots.frame(anim)
+    end
+end
+
+gif(anim, "wave.gif", fps=10)
+#+end_src
+
+#+caption: Initial displacement.
+[[file:figures/wave-first.png]]
+
+#+caption: Wave shortly after simulation begins.
+[[file:figures/wave-inter.png]]
+
+#+caption: Wavefront crossing over the poles. (see gif for animation).
+[[file:figures/wave-last.png]]
+
+\pagebreak
 * Advection equation
 
 ** the scheme
 
 \begin{align*}
-u^{t+1} &= u^t + (v_x, v_y) \cdot \nabla u^t \ \text{or,} \\
-u^{t+1} &= u^t + \recip{\sin\phi}(v_x, v_y)(\sin\phi\nabla)u^t  
+u^{t+1} &= u^t + \mathbf{v} \cdot \nabla u^t \\
+u^{t+1} &= u^t + \recip{\sin\phi}\mathbf{v} \cdot (\sin\phi\nabla)u^t \text{ for sparse matrix.}
 \end{align*}
 
-Where $(v_x, v_y)$ is the constant in time, variable in space velocity field. 
+Where $\mathbf{f}$ is the constant in time, variable in space velocity field. 
 
 Identical to our approach to the Laplacian, we derive a linear system for
 computing the gradient of a scalar field: the action of $\sin\phi\nabla$ is
@@ -323,12 +415,12 @@ We discuss the stability further after writing down the gradient-as-matrix.
 The linear system for the gradient (times $\sin\phi$) is as follows:
 
 \begin{align*}
-(\sin\phi\partial_\phi u)_{m,n} =
+(\sin\phi\partial_\phi u)_{m,n} &=
 \begin{cases}
   \frac{n}{2}[ u_{m,n-1} - u_{m,n+1}] & \text{if m even, $\neq 0$} \\
-  \recip{2}[ (n-1)u_{m,n-1} - (n+1)u_{m,n+1}] & \text{if m odd, $m \eq 0$} 
+  \recip{2}[ (n-1)u_{m,n-1} - (n+1)u_{m,n+1}] & \text{if m odd, $m = 0$} 
 \end{cases} \\
-(\partial_\lambda u)_{m,n} = im u_{m,n}
+(\partial_\lambda u)_{m,n} &= im u_{m,n}
 \end{align*}
 
 And it remains to divide by $\sin\phi$ after leaving frequency space to compute
@@ -356,25 +448,75 @@ u^{t+1} = (1 + \Delta t (\mathbf{v} \cdot \nabla))^{-1} u^t
 
 We could also take a convex combination (with the implicit coefficient slightly
 greater than $\recip{2}$ to account for rounding error) to reduce the diffusive
-effects of the implcicit time step. However, this would approximately double the
-number of computations per time step. 
+effects of the implcicit time step. 
 
 Since we do not have a convenient computational form for the inverse operator, we
 are forced to use an implicit solver (eg. fixed point iteration, secant method, etc).
 This may considerably increase the number of funtion evaluations per time step, in which
-case the additional accuracy of using C-N would be justified. 
+case the additional accuracy of using Crank-Nicolson  would be justified. 
 
 The demos below were generated by an explicit time step with artificial diffusion added,
 on the order of $|\mathbf{v}|\Delta x$.
 
 ** code
    
-- ~plan_advection!(Uf) → function(Uf, Vx, Vy, dt)~
+- ~plan_advection_spectral!(Uf) --> function(Uf, Vx, Vy, dt)~
+
+Returns a routine which advects scalar field ~U~ forward by time-step ~dt~, under velocity
+field ~Vx~, ~Vy~.
 
 ** demos
-   
+
 We advect a pair of gaussian bumps on the sphere subject to an axisymmetric velocity
 field; we take the rotation axis to be offset by $\frac{\pi}{4}$ from the coordinate axis.
+
+#+begin_src julia
+#demos/demo-advection.jl
+import DoubleFourierSphere; dfs = DoubleFourierSphere
+using Plots
+using JLD
+
+Plots.gr()
+
+@load "../../demos/G.jld"
+@load "../../demos/tilted-stream.jld" # called "KK"
+
+G0 = copy(G)
+G0 *= 3
+G0f = dfs.fft_sphere(G0)
+
+# import stream function, take gradient
+Vy, Vx = dfs.gradient(KK)
+Vx *= -1
+
+# dt arbitrarily chosen
+dt = 5e-3
+Advect! = dfs.plan_advection_spectral!(G0f)
+Diffuse! = dfs.plan_diffuse_spectral!(G0f, dt*2*pi/128/16)
+
+anim = Animation()
+
+for i= 1:1000
+    Advect!(G0f, Vx, Vy, dt); Diffuse!(G0f)
+    if i%10 == 0
+        println("tick")
+        heatmap( real(dfs.ift_sphere(G0f))', 
+                 color_limits=(0,1), colorbar=:none)
+        Plots.frame(anim)
+    end
+end
+
+gif(anim, "advect.gif", fps=10)
+#+end_src
+
+#+caption: Stream function, tilted axisymmetric flow.
+[[file:figures/tilted.png]]
+
+#+caption: Scalar field initial density.
+[[file:figures/advect-first.png]]
+
+#+caption: Scalar field final density.
+[[file:figures/advect-last.png]]
 
 * Footnotes
 
