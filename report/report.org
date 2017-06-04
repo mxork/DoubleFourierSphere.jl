@@ -1,9 +1,6 @@
 #+STARTUP: showstars
 #+STARTUP: latexpreview 
 
-* TODO fix m coefficient in derivation
-* TODO add some absolute values
-
 #+LATEX_CLASS_OPTIONS: [10pt]
 
 #+LATEX_HEADER: \usepackage{amsmath}
@@ -23,14 +20,14 @@
 #+date: Fall 2016, eventually
 
 * Introduction 
-** Overview
+** overview
 
 This paper is entirely an implementation of a general spectral method published
 by Cheong[fn:cheong] in ~Julia~[fn:julia-page]. We'll re-derive some results in
 more detail, and prove others which the original author omitted. The aim is to
 display a command of the methods used, and make something useful.
 
-** Notation
+** notation
 
 We adopt some notational conventions which we will use throughout the paper, and which
 match that used in the code. 
@@ -97,13 +94,18 @@ b_{m,n} = e^{im\lambda}
 
 Which are smooth on the extension. Other bases are possible[fn:other-bases].
 
-*** Gotcha
 Note that for $m \neq 0$, the $n=0$ modes are degenerate. Hence, the meridional
 wavenumbers of the mode will depend on which $m$ we are manipulating. In the
-following, if explicit bounds are not specified on $\sum\limits_{m,n}$, we are taking
-$m = -M, -M+1, ..., 0, ..., M$, and $n = 0, 1, ..., N-1$ if $m=0$, or 
-$n = 1, 2, ..., N$ otherwise. For the moment, $M$ and $N$ are arbitrary.
+following, if explicit bounds are not specified on $\sum\limits_{m,n}$, we are taking:
 
+\begin{align*}
+m &= -M, -M+1, ..., 0, ..., M \\
+n &= 0, 1, ..., N-1 &\text{if $m=0$} \\
+n &= 1, 2, ..., N &\text{otherwise}
+\end{align*}
+
+We pick our grid resolution so that $M = N$, ie. we have the same frequency
+resolution in each direction 
 
 The advantage of this basis over, say, the spherical harmonics, is that we get to use
 the FFT. We can perform the longitudinal transform $e^{im\lambda}$ with either a fast
@@ -126,7 +128,12 @@ We implement four main functions for the transform:
 - ~plan_fft_sphere!(U) --> ( function(B, A) --> B )~
 - ~plan_ifft_sphere!(Uf) --> ( function(B, A) --> B )~
 
-** demos and tests
+We implement 4 functions analogous to those found in FFTW. ~fft_sphere~ and ~ifft_sphere~ return a freshly
+allocated matrix containing the forward or inverse transform of the input matrix. The ~plan_*~ functions
+are for repeated use on a matrix of a given dimensionality: they return a function which computes the
+transform of ~A~ and stores it in ~B~. All memory is preallocated, so we avoid thrashing the garbage collector.
+
+** demos
 
 We test the forward transform by running them on specific basis functions,
 and checking the correct coeffficients are non-zero:
@@ -176,7 +183,7 @@ equations. We do an implicit Euler step:
 
 \begin{align*} 
   u^{t+1} =& u^t + \Delta t\laplace u^{t+1} \\
-  u^{t+1} =& (\Id- \Delta t\laplace)^{-1} u^t
+  u^{t+1} =& (1 - \Delta t\laplace)^{-1} u^t
 \end{align*} 
 
 ** math
@@ -213,14 +220,14 @@ we divided the even modes by $\sin\phi$ during the transform.
 We pull a similar trick on $\sin^2(\phi) g$. Collecting coefficients, we obtain for odd m:
 
 \begin{align*} 
-  &(n-2)(n-2)u_{m,n-2} - 2(n^2+2m^2)u_{m,n} + (n+1)(n+2)u_{m,n+2} 
+  &(n-2)(n-2)u_{m,n-2} - 2(n^2+\recip{2}m^2)u_{m,n} + (n+1)(n+2)u_{m,n+2} 
   \\&= -g_{m,n-2} + 2g_{m,n} - g_{m,n+2}   \\
 \end{align*}
 
 And for even m:
 
 \begin{align*} 
-  &n(n-1)u_{m,n-2} - 2(n^2+2m^2)u_{m,n} + n(n+1)u_{m,n+2} 
+  &n(n-1)u_{m,n-2} - 2(n^2+\recip{2}m^2)u_{m,n} + n(n+1)u_{m,n+2} 
   \\&= -g_{m,n-2} + 2g_{m,n} - g_{m,n+2}  
 \end{align*}
 
@@ -243,7 +250,8 @@ systems, so techinically our step is:
   u^{t+1} = (\sin^2\phi - \Delta t \sin^2\phi \laplace)^{-1} \sin^2\phi u^t
 \end{equation*} 
 
-However, clearly the $\sin^2\phi$ factor will not alter the stability, so we ignore it.
+However, clearly the $\sin^2\phi$ factor will not alter the norms of the
+equation, so we ignore it.
 
 The stability of the scheme rests on the eigenvalues of $(1-\Delta t\laplace)^{-1}$:
 in particular we need $\laplace$ to have eigenvalues with negative real part.
@@ -260,8 +268,8 @@ and the spherical harmonics will be consistently approximated by our truncated
 series.
 
 In any case, $\frac{u^{t+1}}{u^t} \leq \recip{1+2\Delta t}$ ($-2$ is the maximal
-eigenvalue), and stability is guaranteed. We have a scheme which is first order
-in time and spectral in space.
+eigenvalue, the bound from below is easy), and stability is guaranteed. We have
+a scheme which is first order in time and spectral in space.
 
 ** code
 
@@ -355,7 +363,8 @@ using JLD
 Plots.gr()
 
 G = zeros(Complex128, 128, 64)
-G[13:33, 23:43] = [ e^(-0.03*x^2 - 0.03*y^2) for x in -10:10, y in -10:10]
+G[13:33, 23:43] = [ e^(-0.03*x^2 - 0.03*y^2) 
+                    for x in -10:10, y in -10:10]
 G *= 3
 
 G0 = copy(G)
@@ -371,7 +380,8 @@ anim = Animation()
 for i= 1:1000
     G1f, G0f = Wave!(G1f, G0f)
     if i%10 == 0
-        heatmap( real(dfs.ift_sphere(G1f))', color_limits=(-1,1), colorbar=:none)
+        heatmap( real(dfs.ift_sphere(G1f))', 
+                 color_limits=(-1,1), colorbar=:none)
         Plots.frame(anim)
     end
 end
@@ -390,15 +400,14 @@ gif(anim, "wave.gif", fps=10)
 
 \pagebreak
 * Advection equation
-
-** the scheme
+** scheme
 
 \begin{align*}
 u^{t+1} &= u^t + \mathbf{v} \cdot \nabla u^t \\
 u^{t+1} &= u^t + \recip{\sin\phi}\mathbf{v} \cdot (\sin\phi\nabla)u^t \text{ for sparse matrix.}
 \end{align*}
 
-Where $\mathbf{f}$ is the constant in time, variable in space velocity field. 
+Where $\mathbf{v}$ is the constant in time, variable in space velocity field. 
 
 Identical to our approach to the Laplacian, we derive a linear system for
 computing the gradient of a scalar field: the action of $\sin\phi\nabla$ is
@@ -446,17 +455,40 @@ u^{t+1} = u^t - \Delta t \mathbf{v} \cdot \nabla u^t+1 \\
 u^{t+1} = (1 + \Delta t (\mathbf{v} \cdot \nabla))^{-1} u^t
 \end{align*}
 
-We could also take a convex combination (with the implicit coefficient slightly
-greater than $\recip{2}$ to account for rounding error) to reduce the diffusive
-effects of the implcicit time step. 
+Which is unconditionally stable. 
 
-Since we do not have a convenient computational form for the inverse operator, we
-are forced to use an implicit solver (eg. fixed point iteration, secant method, etc).
-This may considerably increase the number of funtion evaluations per time step, in which
-case the additional accuracy of using Crank-Nicolson  would be justified. 
+Better still, we can take a convex combination (with the implicit coefficient
+slightly greater than $\recip{2}$ to account for rounding error) to reduce the
+diffusive effects of the implicit time step.
+
+Since we do not have a convenient computational form for the inverse operator
+(sadly), we are forced to use an implicit solver (eg. fixed point iteration,
+secant method, etc). This considerably increases the number of function
+evaluations per time step, so we may as well compute the explicit step as well.
+
+We implement the following scheme: 
+
+\begin{align*}
+u^{t+1} = u^t - \frac{\Delta t}{2}[ (1-\epsilon) \mathbf{v} \cdot \nabla u^t + (1+\epsilon) \mathbf{v} \cdot \nabla u^{t+1} ] \\
+\frac{u^{t+1}}{u^t} = \frac{1-(1-\epsilon)\Delta t \mathbf{v} \cdot \nabla}{(1 + (1+\epsilon)\Delta t (\mathbf{v} \cdot \nabla)}
+\end{align*}
+
+With $\epsilon$ some small real number, sufficient to account for rounding/truncation errors. In the demos below, we take $\epsilon=0.1$,
+which, empirically, works.
+
+Now, the above is a second order linear scheme, so by Godunov's theorem we
+expect some oscillations to be introduced. If we were going to go farther in
+improving this scheme, we would consider a TVD modification; since we have
+already computed the spatial Fourier series of the scalar field, it is easy to
+interpolate the field values at the cell boundaries. However, we cut ourselves
+off here, and instead add some artificial diffusion to keep our demos pretty and
+oscillation-free.
 
 The demos below were generated by an explicit time step with artificial diffusion added,
-on the order of $|\mathbf{v}|\Delta x$.
+on the order of $|\mathbf{v}|\Delta x$. (This estimate is derived from $\mathbf{v} \cdot \nabla$
+having eigenvalue magnitude $\sim (n+m)$. Since oscillations appear in the higher wavenumbers,
+and diffusion acts like $(n^2+m^2)$, we multiply by $\recip{n}$, or $\Delta x$ to estimate the
+required level of diffusion. It's a hack, so we don't fuss over the exact value). 
 
 ** code
    
@@ -520,7 +552,7 @@ gif(anim, "advect.gif", fps=10)
 
 * Footnotes
 
-[fn:cheong] H. Cheong, *Double Fourier series on a sphere*  ... (1997).
+[fn:cheong] H. Cheong, *Double Fourier series on a sphere*, Journal of Computational Physics. (2000).
 [fn:julia-page] [[https://julialang.org]] 
-[fn:other-bases] S. A. Orszag, *Fourier series on spheres* ... (1974).
+[fn:other-bases] S. A. Orszag, *Fourier series on spheres*, Monthly Weather Review. (1974).
      
